@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "400341254581",
+    "project_id": "petmood-50a32",
+    "storage_bucket": "petmood-50a32.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:400341254581:android:72b5e925de9ba2b466d9fc",
+        "android_client_info": {
+          "package_name": "com.petmood"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "400341254581-81r4rslgf86cn1tns6klm15n6kta44rk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFkWG9XuIhlG3nl8JQMNkliiOSS6Pn1JY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "400341254581-81r4rslgf86cn1tns6klm15n6kta44rk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

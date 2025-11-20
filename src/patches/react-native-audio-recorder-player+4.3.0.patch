@@ -1,0 +1,38 @@
+diff --git a/node_modules/react-native-audio-recorder-player/.DS_Store b/node_modules/react-native-audio-recorder-player/.DS_Store
+new file mode 100644
+index 0000000..2485425
+Binary files /dev/null and b/node_modules/react-native-audio-recorder-player/.DS_Store differ
+diff --git a/node_modules/react-native-audio-recorder-player/lib/.DS_Store b/node_modules/react-native-audio-recorder-player/lib/.DS_Store
+new file mode 100644
+index 0000000..0cda496
+Binary files /dev/null and b/node_modules/react-native-audio-recorder-player/lib/.DS_Store differ
+diff --git a/node_modules/react-native-audio-recorder-player/lib/module/index.js b/node_modules/react-native-audio-recorder-player/lib/module/index.js
+index b5365f9..764d742 100644
+--- a/node_modules/react-native-audio-recorder-player/lib/module/index.js
++++ b/node_modules/react-native-audio-recorder-player/lib/module/index.js
+@@ -2,7 +2,7 @@
+ 
+ import { NitroModules } from 'react-native-nitro-modules';
+ export * from "./AudioRecorderPlayer.nitro.js";
+-class AudioRecorderPlayerImpl {
++ export class AudioRecorderPlayerImpl {
+   hybridObject = null;
+   getHybridObject() {
+     if (!this.hybridObject) {
+diff --git a/node_modules/react-native-audio-recorder-player/nitrogen/.DS_Store b/node_modules/react-native-audio-recorder-player/nitrogen/.DS_Store
+new file mode 100644
+index 0000000..500854f
+Binary files /dev/null and b/node_modules/react-native-audio-recorder-player/nitrogen/.DS_Store differ
+diff --git a/node_modules/react-native-audio-recorder-player/src/index.tsx b/node_modules/react-native-audio-recorder-player/src/index.tsx
+index 678988c..fa59750 100644
+--- a/node_modules/react-native-audio-recorder-player/src/index.tsx
++++ b/node_modules/react-native-audio-recorder-player/src/index.tsx
+@@ -9,7 +9,7 @@ import type {
+ 
+ export * from './AudioRecorderPlayer.nitro';
+ 
+-class AudioRecorderPlayerImpl {
++export class AudioRecorderPlayerImpl {
+   private hybridObject: AudioRecorderPlayerType | null = null;
+ 
+   private getHybridObject(): AudioRecorderPlayerType {
