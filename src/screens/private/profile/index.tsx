@@ -1,6 +1,3 @@
-import DateTimePicker, {
-  DateTimePickerEvent,
-} from '@react-native-community/datetimepicker';
 import moment from 'moment';
 import React, { useRef, useState } from 'react';
 import {
@@ -23,6 +20,7 @@ import Header from '../../../components/header/Header';
 import PrimaryInput from '../../../components/inputs/PrimaryInput';
 import AppText from '../../../components/Text/AppText';
 import Dropdown from '../../../components/Dropdown';
+import DatePicker from '../../../components/DatePicker';
 import GlobalBottomSheet, {
   GlobalBottomSheetRef,
 } from '../../../components/views/GlobalBottomSheet';
@@ -57,7 +55,6 @@ const Profile = () => {
   const [selectedSpecies, setSelectedSpecies] = useState<string | number>('');
   const [selectedBreed, setSelectedBreed] = useState<string | number>('');
   const [dob, setDob] = useState<Date | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [petName, setPetName] = useState<string>('');
   const [isProfileCreated, setIsProfileCreated] = useState<boolean>(false);
   const [showPetDetails, setShowPetDetails] = useState<boolean>(false);
@@ -201,14 +198,8 @@ const Profile = () => {
     } catch (e) {}
   };
 
-  const handleDateChange = (
-    event: DateTimePickerEvent,
-    selectedDate?: Date,
-  ) => {
-    setShowDatePicker(false);
-    if (event.type === 'set' && selectedDate) {
-      setDob(selectedDate);
-    }
+  const handleDateChange = (selectedDate: Date) => {
+    setDob(selectedDate);
   };
 
   return (
@@ -285,36 +276,16 @@ const Profile = () => {
               leftIconStyle={{ tintColor: colors.primary }}
             />
 
-            <Pressable
-              onPress={() => setShowDatePicker(true)}
-              style={styles.datePickerContainer}
-            >
-              <Image
-                source={icons.calendar}
-                style={{
-                  width: 18,
-                  height: 18,
-                  tintColor: colors.primary,
-                  marginRight: 8,
-                }}
-              />
-              <AppText
-                style={{ color: dob ? colors.text : colors.placeholder }}
-              >
-                {formatDate(dob)}
-              </AppText>
-            </Pressable>
-
-            {showDatePicker && (
-              <DateTimePicker
-                value={dob || new Date()}
-                mode="date"
-                themeVariant="light"
-                display="spinner"
-                maximumDate={new Date()}
-                onChange={handleDateChange}
-              />
-            )}
+            <DatePicker
+              value={dob}
+              onDateChange={handleDateChange}
+              placeholder="Select Pet Date of Birth"
+              containerStyle={styles.dropdownContainer}
+              leftIcon={icons.calendar}
+              leftIconStyle={{ tintColor: colors.primary }}
+              maximumDate={new Date()}
+              formatDate={formatDate}
+            />
           </>
         ) : showPetDetails ? (
           <PetDetails

@@ -1,6 +1,3 @@
-import DateTimePicker, {
-  DateTimePickerEvent,
-} from '@react-native-community/datetimepicker';
 import moment from 'moment';
 import React, { useRef, useState } from 'react';
 import {
@@ -10,7 +7,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Modal from 'react-native-modal';
 import { showMessage } from 'react-native-flash-message';
 import ImagePicker from 'react-native-image-crop-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,6 +20,7 @@ import Header from '../../../components/header/Header';
 import PrimaryInput from '../../../components/inputs/PrimaryInput';
 import AppText from '../../../components/Text/AppText';
 import Dropdown from '../../../components/Dropdown';
+import DatePicker from '../../../components/DatePicker';
 import GlobalBottomSheet, {
   GlobalBottomSheetRef,
 } from '../../../components/views/GlobalBottomSheet';
@@ -63,7 +60,6 @@ const Home = ({ navigation }: HomeProps) => {
   const [selectedSpecies, setSelectedSpecies] = useState<string>('');
   const [selectedBreed, setSelectedBreed] = useState<string>('');
   const [dob, setDob] = useState<Date | null>(null);
-  const [isDateModalVisible, setIsDateModalVisible] = useState(false);
   const [isProfileCreated, setIsProfileCreated] = useState<boolean>(false);
   const [showPetDetails, setShowPetDetails] = useState<boolean>(false);
   const [selectedId, setSelectedId] = useState<string | number>();
@@ -159,13 +155,8 @@ const Home = ({ navigation }: HomeProps) => {
     } catch (e) {}
   };
 
-  const handleDateChange = (
-    event: DateTimePickerEvent,
-    selectedDate?: Date,
-  ) => {
-    if (event.type === 'set' && selectedDate) {
-      setDob(selectedDate);
-    }
+  const handleDateChange = (selectedDate: Date) => {
+    setDob(selectedDate);
   };
 
   const formatDate = (date: Date | null) => {
@@ -350,63 +341,16 @@ const Home = ({ navigation }: HomeProps) => {
               leftIconStyle={{ tintColor: colors.primary }}
             />
 
-            <Pressable
-              onPress={() => setIsDateModalVisible(true)}
-              style={styles.datePickerContainer}
-            >
-              <Image
-                source={icons.calendar}
-                style={{
-                  width: 18,
-                  height: 18,
-                  tintColor: colors.primary,
-                  marginRight: 8,
-                }}
-              />
-              <AppText
-                style={{ color: dob ? colors.text : colors.placeholder }}
-              >
-                {formatDate(dob)}
-              </AppText>
-            </Pressable>
-
-            <Modal
-              isVisible={isDateModalVisible}
-              onBackdropPress={() => setIsDateModalVisible(false)}
-              onBackButtonPress={() => setIsDateModalVisible(false)}
-              backdropOpacity={0.5}
-              style={{ justifyContent: 'flex-end', margin: 0 }}
-            >
-              <View
-                style={{
-                  backgroundColor: colors.card,
-                  padding: 16,
-                  borderTopLeftRadius: 16,
-                  borderTopRightRadius: 16,
-                }}
-              >
-                <AppText
-                  variant="subheading"
-                  style={{ textAlign: 'center', marginBottom: 10 }}
-                >
-                  Select Date of Birth
-                </AppText>
-
-                <DateTimePicker
-                  value={dob || new Date()}
-                  mode="date"
-                  display="spinner"
-                  maximumDate={new Date()}
-                  onChange={handleDateChange}
-                />
-
-                <PrimaryButton
-                  title="Confirm"
-                  onPress={() => setIsDateModalVisible(false)}
-                  style={{ marginTop: 10 }}
-                />
-              </View>
-            </Modal>
+            <DatePicker
+              value={dob}
+              onDateChange={handleDateChange}
+              placeholder="Select Pet Date of Birth"
+              containerStyle={styles.dropdownContainer}
+              leftIcon={icons.calendar}
+              leftIconStyle={{ tintColor: colors.primary }}
+              maximumDate={new Date()}
+              formatDate={formatDate}
+            />
           </CardView>
         ) : (
           data?.length === 0 && (
