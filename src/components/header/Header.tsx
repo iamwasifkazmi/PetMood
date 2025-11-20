@@ -1,5 +1,6 @@
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import React from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useTheme } from '../../hooks/useTheme';
 import images from '../../assets/images';
@@ -15,22 +16,24 @@ const Header = () => {
   };
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: colors.primary, paddingLeft: spacing.padding },
-      ]}
-    >
-      <Pressable style={styles.menuButton} onPress={handleMenu}>
-        <Ionicons name="menu" size={24} color={colors.card} />
-      </Pressable>
-      <View style={styles.centerContent}>
-        <Image source={images.simple_logo} style={styles.logo} />
-        <AppText color={colors.card} variant="subheading">
-          PetMood
-        </AppText>
+    <SafeAreaView edges={['top']} style={{ backgroundColor: colors.primary }}>
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: colors.primary, paddingLeft: spacing.padding },
+        ]}
+      >
+        <Pressable style={styles.menuButton} onPress={handleMenu}>
+          <Ionicons name="menu" size={24} color={colors.card} />
+        </Pressable>
+        <View style={styles.centerContent}>
+          <Image source={images.simple_logo} style={styles.logo} />
+          <AppText color={colors.card} variant="subheading">
+            PetMood
+          </AppText>
+        </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -38,14 +41,14 @@ export default Header;
 
 const styles = StyleSheet.create({
   container: {
-    height: 100,
-    paddingTop: 20,
+    minHeight: 60,
+    paddingVertical: 12,
     justifyContent: 'center',
   },
   menuButton: {
     position: 'absolute',
     left: 16,
-    marginTop: 15,
+    alignSelf: 'center',
   },
   centerContent: {
     flexDirection: 'row',
@@ -54,8 +57,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   logo: {
-    width: 52,
-    height: 40,
+    width: 40,
+    height: 30,
     resizeMode: 'contain',
   },
 });
