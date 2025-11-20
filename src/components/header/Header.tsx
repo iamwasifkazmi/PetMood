@@ -24,7 +24,7 @@ const Header = () => {
         ]}
       >
         <Pressable style={styles.menuButton} onPress={handleMenu}>
-          <Ionicons name="menu" size={24} color={colors.card} />
+          <Ionicons name="menu" size={28} color={colors.card} />
         </Pressable>
         <View style={styles.centerContent}>
           <Image source={images.simple_logo} style={styles.logo} />

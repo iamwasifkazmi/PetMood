@@ -43,7 +43,7 @@ import {
   useUpdatePetProfileMutation,
 } from '../../../features/pet/petApiSlice';
 import { useTheme } from '../../../hooks/useTheme';
-import { HomeProps } from '../../../navigation/types';
+import { HomeProps, RouteName } from '../../../navigation/types';
 import {
   requestCameraPermission,
   requestGalleryPermission,
@@ -434,9 +434,7 @@ const Home = ({ navigation }: HomeProps) => {
           <>
             <PrimaryButton
               onPress={() => {
-                setIsProfileCreated(true);
-                setIsEdit(false);
-                resetForm();
+                navigation.navigate(RouteName.Profile);
               }}
               type="outlined"
               title="Add New Pet Profile"
