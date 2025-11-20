@@ -39,11 +39,15 @@ const PersonalDetailsTab = ({
       <PrimaryInput
         placeholder="john@gmail.com"
         leftImageSource={icons.email}
-        containerStyle={{ marginBottom: 15 }}
+        containerStyle={[
+          { marginBottom: 15 },
+          styles.disabledInput,
+        ]}
         value={email}
-        onChangeText={setEmail}
+        onChangeText={text => setEmail(text.toLowerCase())}
         keyboardType="email-address"
         autoCapitalize="none"
+        editable={false}
       />
 
       <PrimaryInput
@@ -82,5 +86,9 @@ const useStyles = (colors: Theme['colors'], spacing: Theme['spacing']) =>
   StyleSheet.create({
     dropdownContainer: {
       marginBottom: 20,
+    },
+    disabledInput: {
+      backgroundColor: colors.background,
+      opacity: 0.6,
     },
   });

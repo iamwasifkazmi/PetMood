@@ -99,7 +99,7 @@ const CustomDrawerContent = (props: any) => {
         />
         <View>
           <Text style={styles.userName}>{user?.name}</Text>
-          <Text style={styles.userEmail}>{user?.email}</Text>
+          <Text style={styles.userEmail}>{user?.email?.toLowerCase()}</Text>
         </View>
       </View>
 

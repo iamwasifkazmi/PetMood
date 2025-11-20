@@ -27,7 +27,7 @@ const Settings = () => {
   const { user } = useSelector((state: RootState) => state.user);
 
   const [petImage, setPetImage] = useState<string | null>(null);
-  const [email, setEmail] = React.useState(user?.email ?? '');
+  const [email, setEmail] = React.useState((user?.email ?? '').toLowerCase());
   const [name, setName] = React.useState(user?.name ?? '');
   const [phone, setPhone] = React.useState('');
   const [selectedLocation, setSelectedLocation] = React.useState<
@@ -78,7 +78,7 @@ const Settings = () => {
         await updateProfile(payload).unwrap();
         bottomSheetRef?.current?.expand();
       } else if (isSecurityTab) {
-        const emailUser = user?.email;
+        const emailUser = user?.email?.toLowerCase();
         const payload = {
           email: emailUser ?? '',
           currentPassword,

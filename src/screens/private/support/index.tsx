@@ -79,7 +79,7 @@ const Support = () => {
           leftImageSource={icons.email}
           containerStyle={{ marginBottom: 15 }}
           value={formik.values.email}
-          onChangeText={formik.handleChange('email')}
+          onChangeText={text => formik.setFieldValue('email', text.toLowerCase())}
           keyboardType="email-address"
           autoCapitalize="none"
         />
