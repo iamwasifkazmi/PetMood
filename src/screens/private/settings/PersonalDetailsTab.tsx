@@ -2,7 +2,7 @@ import { StyleSheet, View } from 'react-native';
 import React from 'react';
 import PrimaryInput from '../../../components/inputs/PrimaryInput';
 import icons from '../../../assets/icons/icons';
-import CustomDropdown from '../../../components/views/dropdown';
+import Dropdown from '../../../components/Dropdown';
 import { useTheme } from '../../../hooks/useTheme';
 import { Theme } from '../../../common/theme';
 import { LOCATION_OPTIONS } from '../../../constants/petOptions';
@@ -63,7 +63,7 @@ const PersonalDetailsTab = ({
         keyboardType="phone-pad"
       /> */}
 
-      <CustomDropdown
+      <Dropdown
         options={LOCATION_OPTIONS}
         selectedValue={selectedLocation ?? ''}
         onValueChange={setSelectedLocation}

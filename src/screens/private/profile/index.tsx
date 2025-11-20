@@ -22,7 +22,7 @@ import PetListCard from '../../../components/cards/AnimalListCard';
 import Header from '../../../components/header/Header';
 import PrimaryInput from '../../../components/inputs/PrimaryInput';
 import AppText from '../../../components/Text/AppText';
-import CustomDropdown from '../../../components/views/dropdown';
+import Dropdown from '../../../components/Dropdown';
 import GlobalBottomSheet, {
   GlobalBottomSheetRef,
 } from '../../../components/views/GlobalBottomSheet';
@@ -255,7 +255,7 @@ const Profile = () => {
               onChangeText={setPetName}
             />
 
-            <CustomDropdown
+            <Dropdown
               options={GENDER_OPTIONS}
               selectedValue={selectedGender}
               onValueChange={setSelectedGender}
@@ -265,7 +265,7 @@ const Profile = () => {
               leftIconStyle={{ tintColor: colors.primary }}
             />
 
-            <CustomDropdown
+            <Dropdown
               options={SPECIES_OPTIONS}
               selectedValue={selectedSpecies}
               onValueChange={setSelectedSpecies}
@@ -275,7 +275,7 @@ const Profile = () => {
               leftIconStyle={{ tintColor: colors.primary }}
             />
 
-            <CustomDropdown
+            <Dropdown
               options={BREED_OPTIONS}
               selectedValue={selectedBreed}
               onValueChange={setSelectedBreed}

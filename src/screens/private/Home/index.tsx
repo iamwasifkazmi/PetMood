@@ -23,7 +23,7 @@ import CardView from '../../../components/cards/CardView';
 import Header from '../../../components/header/Header';
 import PrimaryInput from '../../../components/inputs/PrimaryInput';
 import AppText from '../../../components/Text/AppText';
-import CustomDropdown from '../../../components/views/dropdown';
+import Dropdown from '../../../components/Dropdown';
 import GlobalBottomSheet, {
   GlobalBottomSheetRef,
 } from '../../../components/views/GlobalBottomSheet';
@@ -320,7 +320,7 @@ const Home = ({ navigation }: HomeProps) => {
               onChangeText={setPetName}
             />
 
-            <CustomDropdown
+            <Dropdown
               options={GENDER_OPTIONS}
               selectedValue={selectedGender}
               onValueChange={value => setSelectedGender(String(value))}
@@ -330,7 +330,7 @@ const Home = ({ navigation }: HomeProps) => {
               leftIconStyle={{ tintColor: colors.primary }}
             />
 
-            <CustomDropdown
+            <Dropdown
               options={SPECIES_OPTIONS}
               selectedValue={selectedSpecies}
               onValueChange={value => setSelectedSpecies(String(value))}
@@ -340,7 +340,7 @@ const Home = ({ navigation }: HomeProps) => {
               leftIconStyle={{ tintColor: colors.primary }}
             />
 
-            <CustomDropdown
+            <Dropdown
               options={BREED_OPTIONS}
               selectedValue={selectedBreed}
               onValueChange={value => setSelectedBreed(String(value))}
