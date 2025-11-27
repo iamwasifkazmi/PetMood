@@ -84,7 +84,7 @@ const Login = ({ navigation }: LoginProps) => {
               placeholder="Email"
               keyboardType="email-address"
               value={formik.values.email}
-              onChangeText={text => formik.setFieldValue('email', text.toLowerCase())}
+              onChangeText={formik.handleChange('email')}
               autoCapitalize="none"
             />
 

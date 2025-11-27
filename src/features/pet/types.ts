@@ -24,6 +24,11 @@ interface createPetRes {
 
 interface petHistoryArg {
   petId?: string;
+  // Optional search term – backend will search across emotion, pet name, species & breed
+  search?: string;
+  // Optional date range filters (backend expects ISO date / datetime strings)
+  startDate?: string;
+  endDate?: string;
 }
 
 interface PetHistoryRes {

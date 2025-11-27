@@ -14,6 +14,7 @@ import GlobalBottomSheet, {
 } from '../../../components/views/GlobalBottomSheet';
 import { WarningImage } from '../../../components/views/SuccessImage';
 import { useGetPetHistoryQuery } from '../../../features/pet/petApiSlice';
+import DatePicker from '../../../components/DatePicker';
 import { useDeletePetHistoryMutation } from '../../../features/scanning/scanningApiSlice';
 import { useTheme } from '../../../hooks/useTheme';
 import { HistoryProps } from '../../../navigation/types';
@@ -24,8 +25,28 @@ const History = ({ navigation }: HistoryProps) => {
   const bottomSheetRef = useRef<GlobalBottomSheetRef>(null);
   const [petDetails, setPetDetails] = useState<any>(null);
   const [petId, setPetId] = useState<string>('');
+  const [search, setSearch] = useState<string>('');
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+
+  const formatApiDate = (date: Date | null) => {
+    if (!date) {
+      return undefined;
+    }
+    // Use date-only format YYYY-MM-DD as required by backend
+    return date.toISOString().split('T')[0];
+  };
+
+  const startDateParam = formatApiDate(startDate);
+  const endDateParam = formatApiDate(endDate);
+
   const { data: petHistory } = useGetPetHistoryQuery(
-    { petId },
+    {
+      petId,
+      search,
+      startDate: startDateParam,
+      endDate: endDateParam,
+    },
     { refetchOnMountOrArgChange: true, refetchOnReconnect: true },
   );
   const [deletePetHistory, { isLoading: isDeletingPetHistory }] =
@@ -65,28 +86,41 @@ const History = ({ navigation }: HistoryProps) => {
             <PrimaryInput
               leftImageSource={icons.search}
               placeholder="Search..."
+              value={search}
+              onChangeText={setSearch}
               containerStyle={{
                 borderRadius: 50,
                 borderColor: colors.border,
               }}
             />
-            <PrimaryButton
-              renderLeft={() => (
-                <Image
-                  source={icons.calendar2}
-                  style={{
-                    width: 18,
-                    height: 18,
-                    resizeMode: 'contain',
-                    marginRight: 6,
-                  }}
+            <View
+              style={{
+                flexDirection: 'row',
+                gap: 12,
+                marginVertical: 24,
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <DatePicker
+                  value={startDate}
+                  onDateChange={setStartDate}
+                  placeholder="Start date"
+                  containerStyle={styles.dropdownContainer}
+                  leftIcon={icons.calendar2}
+                  leftIconStyle={{ tintColor: colors.primary }}
                 />
-              )}
-              onPress={() => {}}
-              type="outlined"
-              title="Select Date Range"
-              style={{ backgroundColor: colors.card, marginVertical: 24 }}
-            />
+              </View>
+              <View style={{ flex: 1 }}>
+                <DatePicker
+                  value={endDate}
+                  onDateChange={setEndDate}
+                  placeholder="End date"
+                  containerStyle={styles.dropdownContainer}
+                  leftIcon={icons.calendar2}
+                  leftIconStyle={{ tintColor: colors.primary }}
+                />
+              </View>
+            </View>
           </>
         )}
         {showEmotionResult ? (

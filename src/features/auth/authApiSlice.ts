@@ -23,7 +23,7 @@ export const authApiSlice = createApi({
   endpoints: build => ({
     login: build.mutation<loginRes, loginArg>({
       query: arg => ({
-        url: `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=AIzaSyCyjwF43r2-cVFSGeZ_WWxjskTa3QgeyPY`,
+        url: `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=AIzaSyDn_8sMNiJO2h8i95jWT9fmVtUHHGGCHUE`,
         data: arg,
         method: 'post',
       }),

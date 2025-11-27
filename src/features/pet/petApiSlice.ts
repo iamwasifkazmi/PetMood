@@ -53,11 +53,28 @@ export const petApiSlice = createApi({
     }),
 
     getPetHistory: build.query<PetHistoryRes, petHistoryArg>({
-      query: ({ petId = '' } = {}) => ({
-        url: `history`,
-        method: 'GET',
-        params: { petId },
-      }),
+      query: ({ petId = '', search = '', startDate, endDate } = {}) => {
+        const params: Record<string, string> = {};
+
+        if (petId) {
+          params.petId = petId;
+        }
+        if (search) {
+          params.search = search;
+        }
+        if (startDate) {
+          params.startDate = startDate;
+        }
+        if (endDate) {
+          params.endDate = endDate;
+        }
+
+        return {
+          url: `history`,
+          method: 'GET',
+          params,
+        };
+      },
     }),
 
     updatePetProfile: build.mutation<PetHistoryRes, updatePetProfileArg>({
