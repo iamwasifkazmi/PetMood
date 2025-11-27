@@ -43,3 +43,7 @@ interface updatePetProfileArg {
   breed?: string;
   dateOfBirth?: string;
 }
+
+interface getAllProfilesArg {
+  search?: string;
+}

@@ -68,9 +68,12 @@ const Home = ({ navigation }: HomeProps) => {
   const [petDetails, setPetDetails] = useState<any>(null);
   const [isEdit, setIsEdit] = useState<boolean>(false);
   const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   const dispatch = useDispatch();
-  const { data, refetch, isFetching } = useGetAllProfilesQuery();
+  const { data, refetch, isFetching } = useGetAllProfilesQuery(
+    searchQuery ? { search: searchQuery } : undefined
+  );
   const { data: userData } = useGetUserDataQuery();
 
   React.useEffect(() => {
@@ -384,11 +387,25 @@ const Home = ({ navigation }: HomeProps) => {
               title="Add New Pet Profile"
               style={{ backgroundColor: colors.card, marginVertical: 24 }}
             />
+            
+            {/* Search Input */}
+            <PrimaryInput
+              leftImageSource={icons.search}
+              placeholder="Search..."
+              containerStyle={{
+                borderRadius: 50,
+                borderColor: colors.border,
+                marginBottom: 16,
+              }}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoCapitalize="none"
+            />
+            
             {data && data.length > 0 && (
               <PetListCard
-                onPressItem={(pet: createPetRes) => {
+                onPressItem={() => {
                   setShowPetDetails(true);
-                  setPetDetails(pet);
                   setIsProfileCreated(false);
                 }}
                 ANIMAL_DATA={data || []}

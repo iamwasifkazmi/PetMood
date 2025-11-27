@@ -43,13 +43,24 @@ export const petApiSlice = createApi({
           console.error('Failed to update pet list:', err);
         }
       },
+      invalidatesTags: ['Pets'],
     }),
 
-    getAllProfiles: build.query<createPetRes[], void>({
-      query: () => ({
-        url: 'pets',
-        method: 'GET',
-      }),
+    getAllProfiles: build.query<createPetRes[], getAllProfilesArg | void>({
+      query: (params) => {
+        const queryParams: Record<string, string> = {};
+        
+        if (params?.search) {
+          queryParams.search = params.search;
+        }
+        
+        return {
+          url: 'pets',
+          method: 'GET',
+          params: Object.keys(queryParams).length > 0 ? queryParams : undefined,
+        };
+      },
+      providesTags: ['Pets'],
     }),
 
     getPetHistory: build.query<PetHistoryRes, petHistoryArg>({
@@ -102,6 +113,7 @@ export const petApiSlice = createApi({
           console.error('Failed to update cached pet profile:', err);
         }
       },
+      invalidatesTags: ['Pets'],
     }),
 
     deletePetProfile: build.mutation<
@@ -128,6 +140,7 @@ export const petApiSlice = createApi({
           console.error('Failed to delete pet from cache:', err);
         }
       },
+      invalidatesTags: ['Pets'],
     }),
   }),
 });

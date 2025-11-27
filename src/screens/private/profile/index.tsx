@@ -65,7 +65,10 @@ const Profile = () => {
   const [petImage, setPetImage] = useState<string | null>(null);
   const [petDetails, setPetDetails] = useState<any>(null);
   const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState(false);
-  const { data, refetch, isFetching } = useGetAllProfilesQuery();
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const { data, refetch, isFetching } = useGetAllProfilesQuery(
+    searchQuery ? { search: searchQuery } : undefined
+  );
   const [createPetProfile, { isLoading }] = useCreatePetMutation();
   const [updatePetProfile, { isLoading: isUpdating }] =
     useUpdatePetProfileMutation();
@@ -322,6 +325,9 @@ const Profile = () => {
                 borderRadius: 50,
                 borderColor: colors.border,
               }}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoCapitalize="none"
             />
             <PrimaryButton
               onPress={() => {
