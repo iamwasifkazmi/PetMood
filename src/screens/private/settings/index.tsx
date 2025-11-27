@@ -70,12 +70,32 @@ const Settings = () => {
   const handleSaveChanges = async () => {
     try {
       if (isPersonalTab) {
-        const payload = {
-          name,
-          number: phone,
-          location: selectedLocation?.toString(),
-        };
-        await updateProfile(payload).unwrap();
+        const formData = new FormData();
+        
+        if (name) {
+          formData.append('name', name);
+        }
+        if (phone) {
+          formData.append('number', phone);
+        }
+        if (selectedLocation) {
+          formData.append('location', selectedLocation.toString());
+        }
+        
+        // Send image file with 'photoUrl' key as specified
+        if (petImage) {
+          formData.append('photoUrl', {
+            uri: petImage.startsWith('file://')
+              ? petImage
+              : `file://${petImage}`,
+            type: 'image/jpeg',
+            name: `profile_${Date.now()}.jpg`,
+          } as any);
+        }
+        
+        await updateProfile(formData).unwrap();
+        
+        setPetImage(null); // Clear image after successful upload
         bottomSheetRef?.current?.expand();
       } else if (isSecurityTab) {
         const emailUser = user?.email?.toLowerCase();
@@ -92,14 +112,41 @@ const Settings = () => {
         setNewPassword('');
       }
     } catch (error: any) {
-      console.log('Change Password Error:', JSON.stringify(error, null, 2));
-
-      const errMsg =
-        error?.data?.detail || // case 1: RTK unwrap format
-        error?.data?.data?.detail || // case 2: axiosBaseQuery wrapped error
-        error?.message || // fallback
-        'Something went wrong. Please try again.';
-
+      console.log('❌ Profile Update Error - Full Error Object:', JSON.stringify(error, null, 2));
+      console.log('❌ Error Status:', error?.status);
+      console.log('❌ Error Data:', error?.data);
+      console.log('❌ Error Response:', error?.response);
+      
+      // Extract error message from various possible locations
+      let errMsg = 'Something went wrong. Please try again.';
+      
+      if (error?.data) {
+        // RTK Query unwrap format
+        errMsg = 
+          error.data?.detail ||
+          error.data?.message ||
+          error.data?.error?.message ||
+          error.data?.data?.detail ||
+          error.data?.data?.message ||
+          JSON.stringify(error.data);
+      } else if (error?.response?.data) {
+        // Axios error format
+        errMsg = 
+          error.response.data?.detail ||
+          error.response.data?.message ||
+          error.response.data?.error?.message ||
+          JSON.stringify(error.response.data);
+      } else if (error?.message) {
+        errMsg = error.message;
+      }
+      
+      // Include status code if available
+      const statusCode = error?.status || error?.response?.status;
+      if (statusCode) {
+        errMsg = `[${statusCode}] ${errMsg}`;
+      }
+      
+      console.log('❌ Final Error Message:', errMsg);
       showErrMsg(errMsg);
     }
   };

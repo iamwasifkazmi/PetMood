@@ -10,9 +10,9 @@ interface UserQueryRes {
 }
 
 interface UpdateProfileArg {
-  name: string;
-  number: string;
-  location: string;
+  name?: string;
+  number?: string;
+  location?: string;
 }
 interface UpdateProfileRes {
   detail: string;

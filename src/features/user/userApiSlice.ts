@@ -18,14 +18,24 @@ export const userApiSlice = createApi({
 
     updateUserProfile: build.mutation<
       { detail: string; updated: Partial<UserQueryRes> },
-      UpdateProfileArg
+      FormData | UpdateProfileArg
     >({
-      query: arg => ({
-        url: 'profile',
-        method: 'patch',
-        data: arg,
-      }),
-      async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+      query: arg => {
+        const isFormData = arg instanceof FormData;
+        return {
+          url: 'profile',
+          method: 'patch',
+          data: arg,
+          headers: isFormData
+            ? {
+                'Content-Type': 'multipart/form-data',
+              }
+            : {
+                'Content-Type': 'application/json',
+              },
+        };
+      },
+      async onQueryStarted(arg, { dispatch, queryFulfilled, getState }) {
         try {
           const { data } = await queryFulfilled;
           const updatedUser = data.updated;
@@ -42,7 +52,10 @@ export const userApiSlice = createApi({
           );
 
           // ✅ Update Redux `user` slice
-          dispatch(setUser(prev => ({ ...prev, ...updatedUser } as any)));
+          const currentUser = (getState() as any).user?.user;
+          if (currentUser) {
+            dispatch(setUser({ ...currentUser, ...updatedUser } as UserQueryRes));
+          }
         } catch (error) {
           console.log('Update user failed:', error);
         }
