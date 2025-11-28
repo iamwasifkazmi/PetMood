@@ -66,8 +66,11 @@ const AnimalList = ({
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Image
             source={
-              item?.image || item?.photoUrl
-                ? { uri: item.image || item.photoUrl }
+              item?.image || 
+              item?.photoUrl || 
+              item?.pet?.image || 
+              item?.pet?.photoUrl
+                ? { uri: item?.image || item?.photoUrl || item?.pet?.image || item?.pet?.photoUrl }
                 : images.dog_rounded
             }
             style={styles.image}

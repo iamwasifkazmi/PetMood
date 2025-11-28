@@ -32,6 +32,8 @@ export interface ScanHistoryRes {
     dateOfBirth: string;
     gender: string;
     id: string;
+    image?: string;
+    photoUrl?: string;
   };
 }
 export interface DeletePetHistoryArg {
