@@ -20,6 +20,8 @@ interface createPetRes {
   breed: string;
   dateOfBirth: string;
   id: string;
+  image?: string;
+  photoUrl?: string;
 }
 
 interface petHistoryArg {

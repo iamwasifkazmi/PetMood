@@ -188,19 +188,30 @@ const Home = ({ navigation }: HomeProps) => {
       return;
     }
 
-    const payload = {
-      name: petName.trim(),
-      gender: String(selectedGender),
-      species: String(selectedSpecies),
-      breed: String(selectedBreed),
-      dateOfBirth: moment(dob).format('YYYY-MM-DD'),
-    };
-
     try {
       if (isEdit && selectedId) {
+        // Update: Use FormData for update
+        const formData = new FormData();
+        formData.append('name', petName.trim());
+        formData.append('gender', String(selectedGender));
+        formData.append('species', String(selectedSpecies));
+        formData.append('breed', String(selectedBreed));
+        formData.append('dateOfBirth', moment(dob).format('YYYY-MM-DD'));
+
+        if (petImage && !petImage.startsWith('http')) {
+          // Only append if it's a local file path, not a URL
+          formData.append('photoUrl', {
+            uri: petImage.startsWith('file://')
+              ? petImage
+              : `file://${petImage}`,
+            type: 'image/jpeg',
+            name: `pet_${Date.now()}.jpg`,
+          } as any);
+        }
+
         const res = await updatePetProfile({
           id: String(selectedId),
-          ...payload,
+          formData: formData,
         }).unwrap();
         showMessage({
           message: 'Pet profile updated successfully!',
@@ -210,6 +221,7 @@ const Home = ({ navigation }: HomeProps) => {
         setShowPetDetails(true);
         refetch(); // Refresh the list
       } else {
+        // Create: Use FormData for create
         const formData = new FormData();
         formData.append('name', petName.trim());
         formData.append('gender', selectedGender);
@@ -217,7 +229,8 @@ const Home = ({ navigation }: HomeProps) => {
         formData.append('breed', selectedBreed);
         formData.append('dateOfBirth', moment(dob).format('YYYY-MM-DD'));
 
-        if (petImage) {
+        if (petImage && !petImage.startsWith('http')) {
+          // Only append if it's a local file path, not a URL
           formData.append('photoUrl', {
             uri: petImage.startsWith('file://')
               ? petImage

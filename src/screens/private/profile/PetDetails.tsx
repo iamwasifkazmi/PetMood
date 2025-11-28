@@ -23,13 +23,18 @@ const PetDetails = ({
   return (
     <View style={[containerStyle, { gap: 24 }]}>
       <Image
-        source={images.pet_detail}
+        source={
+          petDetails?.image || petDetails?.photoUrl
+            ? { uri: petDetails.image || petDetails.photoUrl }
+            : images.pet_detail
+        }
         style={{
           width: '100%',
           height: 160,
           borderRadius: 16,
           overflow: 'hidden',
         }}
+        resizeMode="cover"
       />
       <EmotionResultCard
         Data={[

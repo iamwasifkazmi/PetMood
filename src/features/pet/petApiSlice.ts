@@ -88,12 +88,27 @@ export const petApiSlice = createApi({
       },
     }),
 
-    updatePetProfile: build.mutation<PetHistoryRes, updatePetProfileArg>({
-      query: arg => ({
-        url: `pets/${arg.id}`,
-        method: 'PATCH',
-        data: arg,
-      }),
+    updatePetProfile: build.mutation<PetHistoryRes, { id: string; formData: FormData } | updatePetProfileArg>({
+      query: arg => {
+        // Check if it's FormData format { id, formData }
+        if ('formData' in arg && arg.formData instanceof FormData) {
+          return {
+            url: `pets/${arg.id}`,
+            method: 'PATCH',
+            data: arg.formData,
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          };
+        }
+        
+        // Otherwise it's the regular updatePetProfileArg object
+        return {
+          url: `pets/${(arg as updatePetProfileArg).id}`,
+          method: 'PATCH',
+          data: arg,
+        };
+      },
       async onQueryStarted(arg, { dispatch, queryFulfilled }) {
         try {
           const { data: updatedPet } = await queryFulfilled;

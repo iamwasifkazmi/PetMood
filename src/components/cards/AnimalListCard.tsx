@@ -65,9 +65,13 @@ const AnimalList = ({
       <View style={styles.topInnerRow}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Image
-            source={images.dog_rounded}
+            source={
+              item?.image || item?.photoUrl
+                ? { uri: item.image || item.photoUrl }
+                : images.dog_rounded
+            }
             style={styles.image}
-            resizeMode="contain"
+            resizeMode="cover"
           />
           <View style={{ marginLeft: 16 }}>
             <AppText variant="heading" size={14}>

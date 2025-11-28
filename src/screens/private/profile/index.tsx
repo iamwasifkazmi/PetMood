@@ -124,19 +124,30 @@ const Profile = () => {
       return;
     }
 
-    const payload = {
-      name: petName.trim(),
-      gender: String(selectedGender),
-      species: String(selectedSpecies),
-      breed: String(selectedBreed),
-      dateOfBirth: moment(dob).format('YYYY-MM-DD'),
-    };
-
     try {
       if (isEdit && selectedId) {
+        // Update: Use FormData for update
+        const formData = new FormData();
+        formData.append('name', petName.trim());
+        formData.append('gender', String(selectedGender));
+        formData.append('species', String(selectedSpecies));
+        formData.append('breed', String(selectedBreed));
+        formData.append('dateOfBirth', moment(dob).format('YYYY-MM-DD'));
+
+        if (petImage && !petImage.startsWith('http')) {
+          // Only append if it's a local file path, not a URL
+          formData.append('photoUrl', {
+            uri: petImage.startsWith('file://')
+              ? petImage
+              : `file://${petImage}`,
+            type: 'image/jpeg',
+            name: `pet_${Date.now()}.jpg`,
+          } as any);
+        }
+
         const res = await updatePetProfile({
           id: String(selectedId),
-          ...payload,
+          formData: formData,
         }).unwrap();
         console.log('res', res);
         showMessage({
@@ -146,7 +157,26 @@ const Profile = () => {
         setIsEdit(false);
         setShowPetDetails(true);
       } else {
-        await createPetProfile(payload).unwrap();
+        // Create: Use FormData for create
+        const formData = new FormData();
+        formData.append('name', petName.trim());
+        formData.append('gender', String(selectedGender));
+        formData.append('species', String(selectedSpecies));
+        formData.append('breed', String(selectedBreed));
+        formData.append('dateOfBirth', moment(dob).format('YYYY-MM-DD'));
+
+        if (petImage && !petImage.startsWith('http')) {
+          // Only append if it's a local file path, not a URL
+          formData.append('photoUrl', {
+            uri: petImage.startsWith('file://')
+              ? petImage
+              : `file://${petImage}`,
+            type: 'image/jpeg',
+            name: `pet_${Date.now()}.jpg`,
+          } as any);
+        }
+
+        await createPetProfile(formData).unwrap();
         console.log('callled');
         bottomSheetRef?.current?.expand();
         resetForm();
