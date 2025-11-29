@@ -136,8 +136,18 @@ const Community = ({ navigation }: CommunityProps) => {
   const handleShare = (id: string) => console.log('Share post', id);
   const handleAction = (action: 'confirm' | 'cancel') => {
     if (action === 'confirm') {
-      setIsPostUpload(true);
-      deletePost({ postId: menuId });
+      // Only delete if we're not showing post upload success message
+      if (!isPostUpload && menuId) {
+        deletePost({ postId: menuId });
+      } else if (isPostUpload) {
+        // If showing success message, just close and reset
+        setIsPostUpload(false);
+        setMenuId('');
+      }
+    } else if (action === 'cancel') {
+      // Reset states on cancel
+      setIsPostUpload(false);
+      setMenuId('');
     }
   };
   const handleCreatePost = async () => {
@@ -151,6 +161,7 @@ const Community = ({ navigation }: CommunityProps) => {
 
       const res = await createCommunityPost(payload).unwrap();
       setIsPostUpload(true);
+      setMenuId(''); // Clear menuId to prevent accidental delete
       setCreatePostData({
         content: '',
         tags: [],
@@ -343,8 +354,16 @@ const Community = ({ navigation }: CommunityProps) => {
           title={isPostUpload ? 'Okay' : 'confirm'}
           loading={isPostUpload ? false : isDeleting}
           onPress={() => {
-            handleAction('confirm');
-            bottomSheetRef?.current?.close();
+            if (isPostUpload) {
+              // For success message, just close and reset
+              setIsPostUpload(false);
+              setMenuId('');
+              bottomSheetRef?.current?.close();
+            } else {
+              // For delete confirmation, call handleAction
+              handleAction('confirm');
+              bottomSheetRef?.current?.close();
+            }
           }}
         />
         {!isPostUpload && (
