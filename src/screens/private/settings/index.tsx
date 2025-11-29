@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Alert, Image, StyleSheet, TouchableOpacity, View } from 'react-native';
 import ImagePicker from 'react-native-image-crop-picker';
+import { useNavigation } from '@react-navigation/native';
 import icons from '../../../assets/icons/icons';
 import images from '../../../assets/images';
 import { Theme } from '../../../common/theme';
@@ -22,6 +23,7 @@ import { useChangePasswordMutation } from '../../../features/auth/authApiSlice';
 import { showErrMsg } from '../../../utils/flashMessage';
 
 const Settings = () => {
+  const navigation = useNavigation();
   const { colors, spacing } = useTheme();
   const styles = useStyles(colors, spacing);
   const { user } = useSelector((state: RootState) => state.user);
@@ -29,10 +31,18 @@ const Settings = () => {
   const [petImage, setPetImage] = useState<string | null>(null);
   const [email, setEmail] = React.useState((user?.email ?? '').toLowerCase());
   const [name, setName] = React.useState(user?.name ?? '');
-  const [phone, setPhone] = React.useState('');
-  const [selectedLocation, setSelectedLocation] = React.useState<
-    string | number
-  >('');
+  const [phone, setPhone] = React.useState(user?.number ?? '');
+  const [selectedLocation, setSelectedLocation] = React.useState<string>(
+    (user as any)?.location ?? '',
+  );
+
+  // Sync with user state changes (including photoUrl updates)
+  React.useEffect(() => {
+    if (user?.email) setEmail(user.email.toLowerCase());
+    if (user?.name) setName(user.name);
+    if (user?.number) setPhone(user.number);
+    if ((user as any)?.location) setSelectedLocation((user as any).location);
+  }, [user?.email, user?.name, user?.number, (user as any)?.location]);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -79,11 +89,11 @@ const Settings = () => {
           formData.append('number', phone);
         }
         if (selectedLocation) {
-          formData.append('location', selectedLocation.toString());
+          formData.append('location', selectedLocation);
         }
         
-        // Send image file with 'photoUrl' key as specified
-        if (petImage) {
+        // Send image file with 'photoUrl' key as specified (only if it's a local file, not a URL)
+        if (petImage && !petImage.startsWith('http')) {
           formData.append('photoUrl', {
             uri: petImage.startsWith('file://')
               ? petImage
@@ -95,7 +105,8 @@ const Settings = () => {
         
         await updateProfile(formData).unwrap();
         
-        setPetImage(null); // Clear image after successful upload
+        // Clear local image state - user state will be updated with new photoUrl from backend
+        setPetImage(null);
         bottomSheetRef?.current?.expand();
       } else if (isSecurityTab) {
         const emailUser = user?.email?.toLowerCase();
@@ -217,7 +228,13 @@ const Settings = () => {
               }}
             >
               <Image
-                source={petImage ? { uri: petImage } : images.gallery_rounded}
+                source={
+                  petImage
+                    ? { uri: petImage }
+                    : user?.photoUrl
+                    ? { uri: user.photoUrl }
+                    : images.gallery_rounded
+                }
                 style={styles.image}
                 resizeMode="cover"
               />
@@ -270,6 +287,11 @@ const Settings = () => {
             title="Cancel"
             style={{ width: '47%' }}
             type="outlined"
+            onPress={() => {
+              (navigation as any).navigate('MainApp', {
+                screen: 'Home',
+              });
+            }}
           />
           <PrimaryButton
             title="Save Changes"

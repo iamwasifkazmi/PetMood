@@ -2,10 +2,8 @@ import { StyleSheet, View } from 'react-native';
 import React from 'react';
 import PrimaryInput from '../../../components/inputs/PrimaryInput';
 import icons from '../../../assets/icons/icons';
-import Dropdown from '../../../components/Dropdown';
 import { useTheme } from '../../../hooks/useTheme';
 import { Theme } from '../../../common/theme';
-import { LOCATION_OPTIONS } from '../../../constants/petOptions';
 
 interface PersonalDetailsProps {
   email: string;
@@ -17,8 +15,8 @@ interface PersonalDetailsProps {
   phone?: string;
   setPhone: (value: string) => void;
 
-  selectedLocation?: string | number;
-  setSelectedLocation: (value: string | number) => void;
+  selectedLocation?: string;
+  setSelectedLocation: (value: string) => void;
 }
 
 const PersonalDetailsTab = ({
@@ -67,14 +65,12 @@ const PersonalDetailsTab = ({
         keyboardType="phone-pad"
       /> */}
 
-      <Dropdown
-        options={LOCATION_OPTIONS}
-        selectedValue={selectedLocation ?? ''}
-        onValueChange={setSelectedLocation}
-        placeholder="Select location"
-        containerStyle={styles.dropdownContainer}
-        leftIcon={icons.location}
-        leftIconStyle={{ tintColor: colors.primary }}
+      <PrimaryInput
+        placeholder="Enter location"
+        leftImageSource={icons.location}
+        containerStyle={{ marginBottom: 15 }}
+        value={selectedLocation ?? ''}
+        onChangeText={setSelectedLocation}
       />
     </View>
   );
@@ -84,9 +80,6 @@ export default PersonalDetailsTab;
 
 const useStyles = (colors: Theme['colors'], spacing: Theme['spacing']) =>
   StyleSheet.create({
-    dropdownContainer: {
-      marginBottom: 20,
-    },
     disabledInput: {
       backgroundColor: colors.background,
       opacity: 0.6,

@@ -7,6 +7,7 @@ interface UserQueryRes {
   otp: string;
   number: string;
   createdAt: string;
+  photoUrl?: string;
 }
 
 interface UpdateProfileArg {
@@ -21,5 +22,6 @@ interface UpdateProfileRes {
     number: string;
     location: string;
     updatedAt: string;
+    photoUrl?: string;
   };
 }

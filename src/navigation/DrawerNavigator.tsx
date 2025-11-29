@@ -15,9 +15,10 @@ import {
   View,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useSelector } from 'react-redux';
 
 // Screens
-import { store } from '../features/store';
+import { RootState } from '../features/store';
 import { useDeleteUserAccountMutation } from '../features/user/userApiSlice';
 import { clearUser } from '../features/user/userSlice';
 import PrivacyPolicy from '../screens/private/privacyPolicy';
@@ -29,7 +30,7 @@ const Drawer = createDrawerNavigator();
 
 const CustomDrawerContent = (props: any) => {
   const navigation = useNavigation();
-  const { user } = store.getState().user;
+  const { user } = useSelector((state: RootState) => state.user);
   const [deleteUserAccount] = useDeleteUserAccountMutation();
   const handleDeleteAccount = () => {
     Alert.alert(
@@ -94,8 +95,13 @@ const CustomDrawerContent = (props: any) => {
       {/* Profile Header */}
       <View style={styles.header}>
         <Image
-          source={{ uri: 'https://randomuser.me/api/portraits/men/41.jpg' }}
+          source={
+            user?.photoUrl
+              ? { uri: user.photoUrl }
+              : require('../assets/images/gallery_rounded.png')
+          }
           style={styles.profileImage}
+          defaultSource={require('../assets/images/gallery_rounded.png')}
         />
         <View>
           <Text style={styles.userName}>{user?.name}</Text>
