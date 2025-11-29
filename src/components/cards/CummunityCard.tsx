@@ -63,9 +63,9 @@ const CummunityCard: React.FC<Props> = ({
       <AppText style={{ marginHorizontal: 20, marginBottom: 5 }}>
         {post?.content}
       </AppText>
-      {post?.images.length > 0 && (
+      {post?.images && Array.isArray(post.images) && post.images.length > 0 && (
         <CommunitySwiper
-          postImages={post?.images || []}
+          postImages={post.images}
           onIndexChange={setActiveIndex}
         />
       )}

@@ -28,12 +28,31 @@ const CommunitySwiper: React.FC<Props> = ({ postImages, onIndexChange }) => {
         showsPagination={false}
         onIndexChanged={handleIndexChanged}
       >
-        {postImages?.map((img, idx) => {
+        {postImages?.filter(Boolean).map((img, idx) => {
+          // Handle both full URLs and relative paths from API
+          let imageUrl = img.trim();
+          
+          if (!imageUrl) {
+            return null;
+          }
+          
+          // If already a full URL (http/https), use as-is
+          if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+            // Do nothing, use as-is
+          } else if (imageUrl.startsWith('/')) {
+            // Relative path starting with / - remove /api/ from base URL and append image path
+            imageUrl = config.api_base_url.replace('/api/', '').replace(/\/$/, '') + imageUrl;
+          } else {
+            // Relative path without leading / - construct full URL
+            const baseUrl = config.api_base_url.replace('/api/', '').replace(/\/$/, '');
+            imageUrl = baseUrl + '/' + imageUrl;
+          }
+          
           return (
             <FastImage
               key={idx}
               source={{
-                uri: config.api_base_url + img,
+                uri: imageUrl,
               }}
               style={styles.image}
               resizeMode="cover"

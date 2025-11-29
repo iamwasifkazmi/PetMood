@@ -7,20 +7,22 @@ export const cummunityApiSlice = createApi({
   reducerPath: 'cummunityApi',
   tagTypes: ['CommunityPosts'],
   endpoints: build => ({
-    // ✅ All community posts
+    // ✅ All community posts - GET /community/posts
     getCummunityPosts: build.query<CummunityRes[], CommunityArg>({
       query: ({ limit = 20, offset = 0 }) => ({
         url: `community/posts?limit=${limit}&offset=${offset}`,
         method: 'get',
       }),
+      providesTags: ['CommunityPosts'],
     }),
 
-    // ✅ NEW ENDPOINT - Logged-in user’s posts only
+    // ✅ My posts - GET /community/posts/my
     getMyCommunityPosts: build.query<CummunityRes[], CommunityArg>({
       query: ({ limit = 20, offset = 0 }) => ({
         url: `community/posts/my?limit=${limit}&offset=${offset}`,
         method: 'get',
       }),
+      providesTags: ['CommunityPosts'],
     }),
 
     likeCommunityPost: build.mutation<CummunityRes, LikePostArg>({
