@@ -11,6 +11,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import { useSelector } from 'react-redux';
 import { useTheme } from '../../../hooks/useTheme';
 import { Theme } from '../../../common/theme';
 import icons from '../../../assets/icons/icons';
@@ -18,6 +19,7 @@ import images from '../../../assets/images';
 import AntDesign from 'react-native-vector-icons/AntDesign';
 import AppText from '../../../components/Text/AppText';
 import moment from 'moment';
+import { RootState } from '../../../features/store';
 
 interface Props {
   onClose: () => void;
@@ -35,6 +37,7 @@ const CommentsView = ({
 }: Props) => {
   const { colors, spacing, fonts } = useTheme();
   const styles = useStyles(colors, spacing, fonts);
+  const { user } = useSelector((state: RootState) => state.user);
 
   const [comment, setComment] = useState('');
 
@@ -103,7 +106,16 @@ const CommentsView = ({
         )}
       </View>
       <View style={styles.inputRow}>
-        <Image source={images.boy} style={styles.inputAvatar} />
+        <Image
+          source={
+            user?.photoUrl
+              ? { uri: user.photoUrl }
+              : require('../../../assets/images/gallery_rounded.png')
+          }
+          style={styles.inputAvatar}
+          defaultSource={require('../../../assets/images/gallery_rounded.png')}
+          resizeMode="cover"
+        />
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
