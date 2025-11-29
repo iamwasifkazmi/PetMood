@@ -8,6 +8,8 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { useTheme } from '../../../hooks/useTheme';
 import icons from '../../../assets/icons/icons';
@@ -73,16 +75,17 @@ const CreatePostView: React.FC<CreatePostViewProps> = ({
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={{ flex: 1 }}
-    >
-      <View
-        style={[
-          styles.container,
-          { borderColor: colors.border, minHeight: inputHeight + 40 },
-        ]}
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
       >
+        <View
+          style={[
+            styles.container,
+            { borderColor: colors.border, minHeight: inputHeight + 40 },
+          ]}
+        >
         <TextInput
           style={[styles.input, { height: inputHeight }]}
           placeholder="What’s on your mind..."
@@ -167,7 +170,8 @@ const CreatePostView: React.FC<CreatePostViewProps> = ({
           }}
         />
       )}
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </TouchableWithoutFeedback>
   );
 };
 

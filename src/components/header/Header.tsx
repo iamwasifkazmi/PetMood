@@ -15,6 +15,13 @@ const Header = () => {
     navigation.dispatch(DrawerActions.openDrawer());
   };
 
+  const handleLogoPress = () => {
+    // Navigate to Home screen
+    (navigation as any).navigate('MainApp', {
+      screen: 'Home',
+    });
+  };
+
   return (
     <SafeAreaView edges={['top']} style={{ backgroundColor: colors.primary }}>
       <View
@@ -26,12 +33,12 @@ const Header = () => {
         <Pressable style={styles.menuButton} onPress={handleMenu}>
           <Ionicons name="menu" size={28} color={colors.card} />
         </Pressable>
-        <View style={styles.centerContent}>
+        <Pressable style={styles.centerContent} onPress={handleLogoPress}>
           <Image source={images.simple_logo} style={styles.logo} />
           <AppText color={colors.card} variant="subheading">
             PetMood
           </AppText>
-        </View>
+        </Pressable>
       </View>
     </SafeAreaView>
   );

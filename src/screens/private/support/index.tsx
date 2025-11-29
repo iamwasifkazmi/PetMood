@@ -1,6 +1,6 @@
 import { useFormik } from 'formik';
 import React, { useRef } from 'react';
-import { Image, StyleSheet, TextInput, View } from 'react-native';
+import { Image, StyleSheet, TextInput, View, Keyboard } from 'react-native';
 import { showMessage } from 'react-native-flash-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -45,6 +45,7 @@ const Support = () => {
   });
 
   const handleSend = async () => {
+    Keyboard.dismiss(); // Dismiss keyboard when sending
     await formik.validateForm();
     const firstError = Object.values(formik.errors)[0];
     if (firstError) {
