@@ -16,6 +16,16 @@ interface CreateScanRes {
     confidence: number;
   }[];
   aiDetectorType: string;
+  pet?: {
+    species?: string;
+    name?: string;
+    breed?: string;
+    dateOfBirth?: string;
+    gender?: string;
+    id?: string;
+    image?: string;
+    photoUrl?: string;
+  };
 }
 
 export interface ScanHistoryRes {

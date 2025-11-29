@@ -14,6 +14,7 @@ interface Props {
   isHistoryScreen?: boolean;
   deleteButtonTitle?: string;
   petScanResult: CreateScanRes;
+  capturedImageUri?: string | null; // For locally captured images
 }
 const EmotionDetectionResults = ({
   containerStyle,
@@ -22,18 +23,39 @@ const EmotionDetectionResults = ({
   isHistoryScreen,
   deleteButtonTitle,
   petScanResult,
+  capturedImageUri,
 }: Props) => {
   const { colors } = useTheme();
+  
+  // Determine which image to show (priority order):
+  // 1. Captured/uploaded image from local file
+  // 2. mediaUrl from scan result (if it's an image)
+  // 3. Pet's profile image from pet object
+  // 4. Fallback to placeholder
+  const getImageSource = () => {
+    if (capturedImageUri) {
+      return { uri: capturedImageUri.startsWith('file://') ? capturedImageUri : `file://${capturedImageUri}` };
+    }
+    if (petScanResult?.mediaUrl && petScanResult.mediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+      return { uri: petScanResult.mediaUrl };
+    }
+    if (petScanResult?.pet?.image || petScanResult?.pet?.photoUrl) {
+      return { uri: petScanResult.pet.image || petScanResult.pet.photoUrl };
+    }
+    return images.pet_detail;
+  };
+  
   return (
     <View style={[containerStyle, { gap: 24 }]}>
       <Image
-        source={images.pet_detail}
+        source={getImageSource()}
         style={{
           width: '100%',
           height: 160,
           borderRadius: 16,
           overflow: 'hidden',
         }}
+        resizeMode="cover"
       />
       <EmotionResultCard
         Data={[

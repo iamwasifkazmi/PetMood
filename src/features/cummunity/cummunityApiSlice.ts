@@ -110,7 +110,7 @@ export const cummunityApiSlice = createApi({
         if (images && images.length > 0) {
           images.forEach((img: any, index: number) => {
             formData.append('images', {
-              uri: img.uri,
+              uri: img.uri?.startsWith('file://') ? img.uri : `file://${img.uri}`,
               type: img.type || 'image/jpeg',
               name: img.fileName || `image_${index}.jpg`,
             } as any);

@@ -40,13 +40,24 @@ const CreatePostView: React.FC<CreatePostViewProps> = ({
         compressImageQuality: 0.8,
       });
 
+      const timestamp = Date.now();
       const selectedImages = Array.isArray(result)
-        ? result.map((img: ImageOrVideo) => ({ uri: img.path }))
-        : [{ uri: (result as ImageOrVideo).path }];
+        ? result.map((img: ImageOrVideo, index: number) => ({
+            uri: img.path.startsWith('file://') ? img.path : `file://${img.path}`,
+            type: img.mime || 'image/jpeg',
+            fileName: img.filename || `image_${timestamp}_${index}.jpg`,
+          }))
+        : [{
+            uri: (result as ImageOrVideo).path.startsWith('file://') 
+              ? (result as ImageOrVideo).path 
+              : `file://${(result as ImageOrVideo).path}`,
+            type: (result as ImageOrVideo).mime || 'image/jpeg',
+            fileName: (result as ImageOrVideo).filename || `image_${timestamp}.jpg`,
+          }];
 
       setFormData(prev => ({
         ...prev,
-        images: [...prev.images, ...selectedImages],
+        images: [...(prev.images || []), ...selectedImages],
       }));
     } catch (err) {}
   };

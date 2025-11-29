@@ -237,12 +237,14 @@ const Scanner = () => {
             />
           )}
 
-          {audioPath && isVoiceCreated && !isRecordingView && (
+          {(audioPath || petImage || scanResult?.mediaUrl) && isVoiceCreated && !isRecordingView && (
             <ScrollView showsVerticalScrollIndicator={false}>
-              <AudioPreview
-                audioPath={audioPath || scanResult?.mediaUrl}
-                duration={30000}
-              />
+              {audioPath && (
+                <AudioPreview
+                  audioPath={audioPath || scanResult?.mediaUrl}
+                  duration={30000}
+                />
+              )}
               <EmotionDetectionResults
                 onSave={() => {}}
                 onRetake={() => {
@@ -250,13 +252,14 @@ const Scanner = () => {
                   setIsRecordingView(true);
                 }}
                 petScanResult={scanResult}
+                capturedImageUri={petImage}
               />
             </ScrollView>
           )}
         </View>
       </View>
 
-      {isUploading && (
+      {isUploading && !isVoiceCreated && (
         <View style={{ position: 'absolute', top: '50%', left: 0, right: 0 }}>
           <ActivityIndicator size="large" color={colors.primary} />
           <AppText style={{ textAlign: 'center', color: colors.text }}>

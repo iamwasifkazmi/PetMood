@@ -50,5 +50,9 @@ interface CreatePostArg {
   content: string;
   tags?: string[];
   isPublic?: boolean;
-  images?: string[];
+  images?: Array<{
+    uri: string;
+    type?: string;
+    fileName?: string;
+  }>;
 }
