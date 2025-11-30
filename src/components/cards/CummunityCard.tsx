@@ -10,12 +10,14 @@ import { useTheme } from '../../hooks/useTheme';
 import AppText from '../Text/AppText';
 import CommunitySwiper from './CummunitySwiper';
 import moment from 'moment';
+import { CummunityRes } from '../../features/cummunity/types';
 interface Props {
   post: CummunityRes;
   onMenu: (id: string) => void;
   onLikePost: (id: string) => void;
   onCommentPost: (id: string) => void;
   onSharePost: (id: string) => void;
+  onLikesPress?: (id: string) => void;
   isLikedPost: boolean;
 }
 
@@ -25,6 +27,7 @@ const CummunityCard: React.FC<Props> = ({
   onLikePost,
   onCommentPost,
   onSharePost,
+  onLikesPress,
   isLikedPost,
 }) => {
   const { colors, fonts, spacing } = useTheme();
@@ -124,17 +127,21 @@ const CummunityCard: React.FC<Props> = ({
           ))}
         </View>
 
-        <TouchableOpacity onPress={() => onSharePost(post.id)}>
+        {/* <TouchableOpacity onPress={() => onSharePost(post.id)}>
           <Image
             source={icons.share}
             style={{ width: 24, height: 24, resizeMode: 'contain' }}
           />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       {/* Likes */}
       {post?.likesCount > 0 && (
-        <View style={styles.likesContainer}>
+        <TouchableOpacity
+          style={styles.likesContainer}
+          onPress={() => onLikesPress?.(post.id)}
+          activeOpacity={0.7}
+        >
           <Image
             source={
               post?.authorPhotoUrl
@@ -159,7 +166,7 @@ const CummunityCard: React.FC<Props> = ({
               </>
             )}
           </AppText>
-        </View>
+        </TouchableOpacity>
       )}
     </View>
   );

@@ -35,8 +35,11 @@ import {
   useGetCommunityCommentsQuery,
   useGetCummunityPostsQuery,
   useGetMyCommunityPostsQuery,
+  useGetPostLikesQuery,
   useLikeCommunityPostMutation,
 } from '../../../features/cummunity/cummunityApiSlice';
+import { CreatePostArg } from '../../../features/cummunity/types';
+import LikesListView from './LikesListView';
 
 const Community = ({ navigation }: CommunityProps) => {
   const { colors, fonts, spacing } = useTheme();
@@ -53,9 +56,12 @@ const Community = ({ navigation }: CommunityProps) => {
   const [createPost, setCreatePost] = useState<boolean>(false);
   const [isPostUpload, setIsPostUpload] = useState<boolean>(false);
   const [showComments, setShowComments] = useState<boolean>(false);
+  const [showLikes, setShowLikes] = useState<boolean>(false);
   const [isLikedPost, setIsLikedPost] = useState<boolean>(false);
   const bottomSheetRef = useRef<GlobalBottomSheetRef>(null);
+  const likesBottomSheetRef = useRef<GlobalBottomSheetRef>(null);
   const [postId, setPostId] = useState<string>('');
+  const [likesPostId, setLikesPostId] = useState<string>('');
   const [menuId, setMenuId] = useState<string>('');
   const [refreshing, setRefreshing] = useState(false);
   const [createCommunityPost, { isLoading: creatingPost }] =
@@ -94,6 +100,17 @@ const Community = ({ navigation }: CommunityProps) => {
         skip: !showComments,
       },
     );
+
+  const { data: likesData, isLoading: likesLoading } = useGetPostLikesQuery(
+    {
+      postId: likesPostId,
+      limit: 50,
+      offset: 0,
+    },
+    {
+      skip: !showLikes || !likesPostId,
+    },
+  );
   const [deletePost, { isLoading: isDeleting }] =
     useDeleteCommunityPostMutation();
 
@@ -126,6 +143,18 @@ const Community = ({ navigation }: CommunityProps) => {
   const handleComment = (id: string) => {
     setPostId(id);
     setShowComments(true);
+  };
+
+  const handleLikesPress = (id: string) => {
+    setLikesPostId(id);
+    setShowLikes(true);
+    likesBottomSheetRef?.current?.expand();
+  };
+
+  const handleCloseLikes = () => {
+    setShowLikes(false);
+    setLikesPostId('');
+    likesBottomSheetRef?.current?.close();
   };
 
   const handleCreateComment = async (text: string) => {
@@ -316,6 +345,7 @@ const Community = ({ navigation }: CommunityProps) => {
                     onLikePost={handleLike}
                     onCommentPost={handleComment}
                     onSharePost={handleShare}
+                    onLikesPress={handleLikesPress}
                     isLikedPost={isLikedPost}
                   />
                 )}
@@ -375,6 +405,31 @@ const Community = ({ navigation }: CommunityProps) => {
               handleAction('cancel');
               bottomSheetRef?.current?.close();
             }}
+          />
+        )}
+      </GlobalBottomSheet>
+
+      {/* Likes Modal */}
+      <GlobalBottomSheet
+        ref={likesBottomSheetRef}
+        snapPoints={['60%', '90%']}
+        showHandle={true}
+      >
+        <AppText
+          variant="subheading"
+          fontWeight="bold"
+          style={{ textAlign: 'center', marginBottom: spacing.md }}
+        >
+          Likes ({likesData?.totalCount || 0})
+        </AppText>
+        {likesLoading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : (
+          <LikesListView
+            likes={likesData?.likes || []}
+            isLoading={likesLoading}
           />
         )}
       </GlobalBottomSheet>

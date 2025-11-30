@@ -62,6 +62,13 @@ export const cummunityApiSlice = createApi({
       }),
     }),
 
+    getPostLikes: build.query<GetPostLikesRes, GetPostLikesArg>({
+      query: ({ postId, limit = 50, offset = 0 }) => ({
+        url: `community/posts/${postId}/like?limit=${limit}&offset=${offset}`,
+        method: 'get',
+      }),
+    }),
+
     createCommunityComment: build.mutation<getCommentRes, CreateCommentArg>({
       query: ({ postId, content }) => ({
         url: `community/comments/create`,
@@ -215,4 +222,5 @@ export const {
   useCreateCommunityCommentMutation,
   useCreateCommunityPostMutation,
   useDeleteCommunityPostMutation,
+  useGetPostLikesQuery,
 } = cummunityApiSlice;

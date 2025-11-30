@@ -1,9 +1,9 @@
-interface CommunityArg {
+export interface CommunityArg {
   limit?: number;
   offset?: number;
 }
 
-interface CummunityRes {
+export interface CummunityRes {
   createdAt: string;
   isPublic: boolean;
   authorName: string;
@@ -20,11 +20,11 @@ interface CummunityRes {
   commentsCount: number;
   sharesCount: number;
 }
-interface LikePostArg {
+export interface LikePostArg {
   postId: string;
 }
 
-interface getCommentRes {
+export interface getCommentRes {
   createdAt: string;
   isPublic: boolean;
   authorName: string;
@@ -41,16 +41,33 @@ interface getCommentRes {
   commentsCount: number;
   sharesCount: number;
 }
-interface GetCommentsArg extends CommunityArg {
+export interface GetCommentsArg extends CommunityArg {
   postId: string;
 }
 
-interface CreateCommentArg {
+export interface GetPostLikesArg extends CommunityArg {
+  postId: string;
+}
+
+export interface PostLikeUser {
+  userId: string;
+  userName: string;
+  userPhotoUrl?: string;
+  userLocation?: string;
+  likedAt: string;
+}
+
+export interface GetPostLikesRes {
+  likes: PostLikeUser[];
+  totalCount: number;
+}
+
+export interface CreateCommentArg {
   postId: string;
   content: string;
 }
 
-interface CreatePostArg {
+export interface CreatePostArg {
   content: string;
   tags?: string[];
   isPublic?: boolean;
