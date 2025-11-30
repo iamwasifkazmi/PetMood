@@ -4,6 +4,7 @@ import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Entypo from 'react-native-vector-icons/Entypo';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import icons from '../../assets/icons/icons';
+import images from '../../assets/images';
 import { Theme } from '../../common/theme';
 import { useTheme } from '../../hooks/useTheme';
 import AppText from '../Text/AppText';
@@ -36,13 +37,18 @@ const CummunityCard: React.FC<Props> = ({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <View>
             <Image
-              source={icons.user}
+              source={
+                post?.authorPhotoUrl
+                  ? { uri: post.authorPhotoUrl }
+                  : images.gallery_rounded
+              }
               style={{
                 width: 38,
                 height: 38,
-                borderRadius: 50,
-                resizeMode: 'contain',
+                borderRadius: 19,
+                resizeMode: 'cover',
               }}
+              defaultSource={images.gallery_rounded}
             />
           </View>
           <View>
@@ -50,8 +56,12 @@ const CummunityCard: React.FC<Props> = ({
             <View
               style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
             >
-              <AppText size={12}>{'Japan'}</AppText>
-              <View style={styles.singleDot} />
+              {post?.authorLocation && (
+                <>
+                  <AppText size={12}>{post.authorLocation}</AppText>
+                  <View style={styles.singleDot} />
+                </>
+              )}
               <AppText size={12}>{moment(post.createdAt).fromNow()}</AppText>
             </View>
           </View>
@@ -123,20 +133,34 @@ const CummunityCard: React.FC<Props> = ({
       </View>
 
       {/* Likes */}
-      <View style={styles.likesContainer}>
-        <Image source={icons.user} style={styles.likeUser} />
-        <AppText size={12}>
-          Liked by{' '}
-          <AppText size={12} fontWeight="bold">
-            {post.isLikedByUser} {post?.authorName}
-          </AppText>{' '}
-          {post?.likesCount > 1 && (
+      {post?.likesCount > 0 && (
+        <View style={styles.likesContainer}>
+          <Image
+            source={
+              post?.authorPhotoUrl
+                ? { uri: post.authorPhotoUrl }
+                : images.gallery_rounded
+            }
+            style={styles.likeUser}
+            defaultSource={images.gallery_rounded}
+            resizeMode="cover"
+          />
+          <AppText size={12}>
+            Liked by{' '}
             <AppText size={12} fontWeight="bold">
-              and {post.likesCount} others
+              {post?.authorName}
             </AppText>
-          )}
-        </AppText>
-      </View>
+            {post?.likesCount > 1 && (
+              <>
+                {' '}
+                <AppText size={12} fontWeight="bold">
+                  and {post.likesCount - 1} others
+                </AppText>
+              </>
+            )}
+          </AppText>
+        </View>
+      )}
     </View>
   );
 };
@@ -193,6 +217,7 @@ const useStyles = (
     likeUser: {
       width: 18,
       height: 18,
-      resizeMode: 'contain',
+      borderRadius: 9,
+      resizeMode: 'cover',
     },
   });

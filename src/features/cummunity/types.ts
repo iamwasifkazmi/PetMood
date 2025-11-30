@@ -7,6 +7,8 @@ interface CummunityRes {
   createdAt: string;
   isPublic: boolean;
   authorName: string;
+  authorPhotoUrl?: string;
+  authorLocation?: string;
   updatedAt: string;
   authorId: string;
   content: string;
@@ -26,6 +28,8 @@ interface getCommentRes {
   createdAt: string;
   isPublic: boolean;
   authorName: string;
+  authorPhotoUrl?: string;
+  authorLocation?: string;
   updatedAt: string;
   authorId: string;
   content: string;

@@ -43,7 +43,16 @@ const CommentsView = ({
 
   const renderComment = ({ item }: { item: getCommentRes }) => (
     <View style={styles.commentRow}>
-      <Image source={icons.user} style={styles.avatar} />
+      <Image
+        source={
+          item?.authorPhotoUrl
+            ? { uri: item.authorPhotoUrl }
+            : images.gallery_rounded
+        }
+        style={styles.avatar}
+        defaultSource={images.gallery_rounded}
+        resizeMode="cover"
+      />
       <View style={{ flex: 1 }}>
         <View style={styles.nameRow}>
           <AppText fontWeight="semiBold" size={13}>
@@ -188,7 +197,8 @@ const useStyles = (
     avatar: {
       width: 30,
       height: 30,
-      borderRadius: 20,
+      borderRadius: 15,
+      resizeMode: 'cover',
     },
     inputAvatar: {
       width: 40,
