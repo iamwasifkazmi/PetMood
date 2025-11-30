@@ -6,20 +6,25 @@ import { useTheme } from '../../hooks/useTheme';
 import images from '../../assets/images';
 import AppText from '../Text/AppText';
 import { DrawerActions, useNavigation } from '@react-navigation/native';
+import { NavigationProp } from '@react-navigation/native';
 
 const Header = () => {
   const { colors, spacing } = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<any>>();
 
   const handleMenu = () => {
+    // Only open drawer - do NOT navigate
     navigation.dispatch(DrawerActions.openDrawer());
   };
 
   const handleLogoPress = () => {
-    // Navigate to Home screen
-    (navigation as any).navigate('MainApp', {
-      screen: 'Home',
-    });
+    // Close drawer first, then navigate to Home screen
+    navigation.dispatch(DrawerActions.closeDrawer());
+    setTimeout(() => {
+      (navigation as any).navigate('MainApp', {
+        screen: 'Home',
+      });
+    }, 100);
   };
 
   return (
@@ -30,15 +35,24 @@ const Header = () => {
           { backgroundColor: colors.primary, paddingLeft: spacing.padding },
         ]}
       >
-        <Pressable style={styles.menuButton} onPress={handleMenu}>
+        <Pressable 
+          style={styles.menuButton} 
+          onPress={handleMenu}
+        >
           <Ionicons name="menu" size={28} color={colors.card} />
         </Pressable>
-        <Pressable style={styles.centerContent} onPress={handleLogoPress}>
-          <Image source={images.simple_logo} style={styles.logo} />
-          <AppText color={colors.card} variant="subheading">
-            PetMood
-          </AppText>
-        </Pressable>
+        <View style={styles.centerContainer}>
+          <Pressable 
+            onPress={handleLogoPress}
+            style={styles.logoPressable}
+          >
+            <Image source={images.simple_logo} style={styles.logo} />
+            <AppText color={colors.card} variant="subheading">
+              PetMood
+            </AppText>
+          </Pressable>
+        </View>
+        <View style={styles.rightSpacer} />
       </View>
     </SafeAreaView>
   );
@@ -57,11 +71,25 @@ const styles = StyleSheet.create({
     left: 16,
     alignSelf: 'center',
   },
-  centerContent: {
+  centerContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    pointerEvents: 'box-none',
+  },
+  logoPressable: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  rightSpacer: {
+    width: 44, // Same width as menu button to balance layout
+    marginLeft: 'auto',
   },
   logo: {
     width: 40,
