@@ -112,7 +112,7 @@ const CummunityCard: React.FC<Props> = ({
           </TouchableOpacity>
         </View>
 
-        <View style={styles.dotsContainer}>
+        {/* <View style={styles.dotsContainer}>
           {post?.images?.map((_, idx) => (
             <View
               key={idx}
@@ -125,7 +125,7 @@ const CummunityCard: React.FC<Props> = ({
               ]}
             />
           ))}
-        </View>
+        </View> */}
 
         {/* <TouchableOpacity onPress={() => onSharePost(post.id)}>
           <Image
