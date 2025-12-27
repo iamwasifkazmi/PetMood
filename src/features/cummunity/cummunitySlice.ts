@@ -5,7 +5,7 @@ export interface cummunitySliceState {
 }
 
 export const cummunitySlice = createSlice({
-  name: 'cummunity',
+  name: 'Community',
   initialState: {} as cummunitySliceState,
   reducers: {},
 });

@@ -240,7 +240,7 @@ const Community = ({ navigation }: CommunityProps) => {
           </Pressable>
         )}
         <AppText variant="subheading">
-          {createPost ? 'Emotion Result' : 'Cummunity'}
+          {createPost ? 'Emotion Result' : 'Community'}
         </AppText>
       </View>
       {createPost ? (
