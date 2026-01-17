@@ -55,9 +55,24 @@ export const useSubscription = () => {
    */
   const purchaseSubscription = async (productId: string) => {
     try {
+      // Ensure products are loaded
+      if (!isInitialized) {
+        throw new Error('Subscription service is not initialized. Please wait...');
+      }
+      
+      if (products.length === 0) {
+        throw new Error('Products are not loaded yet. Please wait...');
+      }
+
+      // Check if product exists
+      const productExists = products.some(p => p.productId === productId);
+      if (!productExists) {
+        throw new Error('This product is not available. Please ensure the subscription is configured in App Store Connect.');
+      }
+
       await subscriptionService.purchaseSubscription(productId);
       // Status will be updated via purchase listener
-    } catch (error) {
+    } catch (error: any) {
       throw error;
     }
   };

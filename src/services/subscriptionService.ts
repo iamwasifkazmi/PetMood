@@ -145,11 +145,26 @@ class SubscriptionService {
       store.dispatch(setLoading(true));
       store.dispatch(setError(null));
 
-      await requestPurchase({ sku: productId });
+      // Ensure products are loaded first
+      const productIds = getAllProductIds();
+      const availableProducts = await getProducts({ skus: productIds });
+      
+      // Check if the product exists
+      const product = availableProducts.find(p => p.productId === productId);
+      if (!product) {
+        throw new Error(`Product ${productId} is not available. Please ensure products are configured in App Store Connect.`);
+      }
+
+      // Request purchase with proper configuration
+      await requestPurchase({ 
+        sku: productId,
+        skus: [productId] // Some versions require this
+      });
       // The purchase will be handled by the purchaseUpdatedListener
     } catch (error: any) {
       console.error('Error purchasing subscription:', error);
-      store.dispatch(setError(error.message || 'Purchase failed'));
+      const errorMessage = error.message || 'Purchase failed';
+      store.dispatch(setError(errorMessage));
       store.dispatch(setLoading(false));
       throw error;
     }

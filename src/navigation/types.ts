@@ -16,6 +16,7 @@ export enum RouteName {
   BottomTabStack = 'BottomTabStack',
   DrawerTabStack = 'DrawerTabStack',
   Support = 'Support',
+  Subscription = 'Subscription',
 }
 
 export type StackParamList = {
@@ -38,6 +39,7 @@ export type StackParamList = {
   BottomTabStack: undefined;
   Support: undefined;
   DrawerTabStack: undefined;
+  Subscription: undefined;
 };
 
 type ScreenProps<T extends keyof StackParamList> = NativeStackScreenProps<
@@ -61,3 +63,4 @@ export type BottomTabStackProps = ScreenProps<RouteName.BottomTabStack>;
 export type DrawerStackProps = ScreenProps<RouteName.DrawerTabStack>;
 
 export type SupportProps = ScreenProps<RouteName.Support>;
+export type SubscriptionProps = ScreenProps<RouteName.Subscription>;

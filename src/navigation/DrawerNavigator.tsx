@@ -18,12 +18,13 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSelector } from 'react-redux';
 
 // Screens
-import { RootState } from '../features/store';
+import { RootState, store } from '../features/store';
 import { useDeleteUserAccountMutation } from '../features/user/userApiSlice';
 import { clearUser } from '../features/user/userSlice';
 import PrivacyPolicy from '../screens/private/privacyPolicy';
 import Settings from '../screens/private/settings';
 import Support from '../screens/private/support';
+import Subscription from '../screens/private/subscription';
 import BottomTabStack from './BottomTabStack';
 
 const Drawer = createDrawerNavigator();
@@ -138,6 +139,17 @@ const CustomDrawerContent = (props: any) => {
         <TouchableOpacity
           style={styles.menuItem}
           onPress={() => {
+            props.navigation.navigate('Subscription');
+            props.navigation.dispatch(DrawerActions.closeDrawer());
+          }}
+        >
+          <Icon name="crown-outline" size={22} color="#999" />
+          <Text style={styles.menuText}>Subscription</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => {
             props.navigation.navigate('Support');
             props.navigation.dispatch(DrawerActions.closeDrawer());
           }}
@@ -200,6 +212,14 @@ const DrawerNavigator = () => {
         options={{
           drawerLabel: 'Settings',
           title: 'Settings',
+        }}
+      />
+      <Drawer.Screen
+        name="Subscription"
+        component={Subscription}
+        options={{
+          drawerLabel: 'Subscription',
+          title: 'Subscription',
         }}
       />
       <Drawer.Screen
