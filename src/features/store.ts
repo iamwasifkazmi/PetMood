@@ -22,6 +22,8 @@ import { scannPetSlice } from './scanning/scanningSlice';
 import { scanningApiSlice } from './scanning/scanningApiSlice';
 import { userApiSlice } from './user/userApiSlice';
 import { userSlice } from './user/userSlice';
+import { subscriptionApiSlice } from './subscription/subscriptionApiSlice';
+import subscriptionSlice from './subscription/subscriptionSlice';
 
 const rootReducer = combineSlices(
   tabBarSlice,
@@ -37,6 +39,8 @@ const rootReducer = combineSlices(
   scanningApiSlice,
   userApiSlice,
   userSlice,
+  subscriptionApiSlice,
+  subscriptionSlice,
 );
 
 // Infer the `RootState` type from the root reducer
@@ -68,13 +72,14 @@ export const store = configureStore({
       immutableCheck: false,
       serializableCheck: false,
       actionCreatorCheck: false,
-    }).concat(
+    }    ).concat(
       authApiSlice.middleware,
       petApiSlice.middleware,
       supportApiSlice.middleware,
       cummunityApiSlice.middleware,
       scanningApiSlice.middleware,
       userApiSlice.middleware,
+      subscriptionApiSlice.middleware,
     ),
 });
 
