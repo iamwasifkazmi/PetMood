@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -17,6 +18,7 @@ import { useSubscription } from '../../../hooks/useSubscription';
 import { SUBSCRIPTION_PLANS } from '../../../constants/subscription';
 import { Theme } from '../../../common/theme';
 import { showErrMsg, showSuccessMsg } from '../../../utils/flashMessage';
+import { DrawerActions } from '@react-navigation/native';
 
 const Subscription = () => {
   const navigation = useNavigation();
@@ -37,10 +39,20 @@ const Subscription = () => {
 
   // Get product price from Apple (if available)
   const getProductPrice = (productId: string): string => {
-    const product = products.find(p => p.productId === productId);
-    if (product?.localizedPrice) {
-      return product.localizedPrice;
+    // Find product by checking productId property
+    const product = products.find((p: any) => {
+      const id = p.productId || p.productIdentifier;
+      return id === productId;
+    });
+    
+    if (product) {
+      // Get price from product (handle both iOS and Android types)
+      const price = (product as any).localizedPrice || (product as any).price;
+      if (price) {
+        return price;
+      }
     }
+    
     // Fallback to configured price
     const plan = SUBSCRIPTION_PLANS.find(p => p.productId === productId);
     return plan?.priceFormatted || '';
@@ -138,6 +150,45 @@ const Subscription = () => {
           Subscription Plans
         </AppText>
 
+        {/* Subscription Benefits Description */}
+        <View style={styles.benefitsCard}>
+          <AppText fontWeight="bold" style={{ marginBottom: 8 }}>
+            What You Get:
+          </AppText>
+          <View style={styles.benefitItem}>
+            <AppText style={styles.bullet}>•</AppText>
+            <AppText style={styles.benefitText}>
+              Unlimited pet emotion detection scans
+            </AppText>
+          </View>
+          <View style={styles.benefitItem}>
+            <AppText style={styles.bullet}>•</AppText>
+            <AppText style={styles.benefitText}>
+              Access to premium AI analysis features
+            </AppText>
+          </View>
+          <View style={styles.benefitItem}>
+            <AppText style={styles.bullet}>•</AppText>
+            <AppText style={styles.benefitText}>
+              Full scan history and pet profile management
+            </AppText>
+          </View>
+          <View style={styles.benefitItem}>
+            <AppText style={styles.bullet}>•</AppText>
+            <AppText style={styles.benefitText}>
+              Priority support and updates
+            </AppText>
+          </View>
+          {subscription?.planType === 'family' && (
+            <View style={styles.benefitItem}>
+              <AppText style={styles.bullet}>•</AppText>
+              <AppText style={styles.benefitText}>
+                Support for up to 2 additional pets
+              </AppText>
+            </View>
+          )}
+        </View>
+
         {/* Current Subscription Status */}
         {subscription && (
           <View style={styles.statusCard}>
@@ -158,14 +209,14 @@ const Subscription = () => {
         )}
 
         {error && (
-          <View style={[styles.statusCard, { backgroundColor: colors.error + '20' }]}>
-            <AppText color={colors.error}>{error}</AppText>
+          <View style={[styles.statusCard, { backgroundColor: colors.danger + '20' }]}>
+            <AppText color={colors.danger}>{error}</AppText>
           </View>
         )}
 
         {Platform.OS !== 'ios' && (
-          <View style={[styles.statusCard, { backgroundColor: colors.warning + '20' }]}>
-            <AppText color={colors.warning}>
+          <View style={[styles.statusCard, { backgroundColor: '#FFA50020' }]}>
+            <AppText color="#FFA500">
               Subscriptions are only available on iOS devices.
             </AppText>
           </View>
@@ -211,6 +262,11 @@ const Subscription = () => {
                   </AppText>
                   <AppText color={colors.caption} size={14} style={{ marginTop: 4 }}>
                     {plan.description}
+                  </AppText>
+                  <AppText color={colors.caption} size={12} style={{ marginTop: 8 }}>
+                    {plan.period === 'monthly'
+                      ? 'Billed monthly, auto-renews'
+                      : 'Billed annually, auto-renews'}
                   </AppText>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
@@ -275,6 +331,11 @@ const Subscription = () => {
                   <AppText color={colors.caption} size={14} style={{ marginTop: 4 }}>
                     {plan.description}
                   </AppText>
+                  <AppText color={colors.caption} size={12} style={{ marginTop: 8 }}>
+                    {plan.period === 'monthly'
+                      ? 'Billed monthly, auto-renews'
+                      : 'Billed annually, auto-renews'}
+                  </AppText>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <AppText fontWeight="bold" size={20} color={colors.primary}>
@@ -315,11 +376,40 @@ const Subscription = () => {
           style={{ marginTop: 32, marginBottom: 24 }}
         />
 
+        {/* Required Links - Terms of Use and Privacy Policy */}
+        <View style={styles.linksContainer}>
+          <TouchableOpacity
+            onPress={() => {
+              // Navigate to Privacy Policy - it's in the drawer navigator
+              (navigation as any).navigate('PrivacyPolicy');
+            }}
+            style={styles.linkButton}
+          >
+            <AppText size={14} color={colors.primary} fontWeight="medium">
+              Privacy Policy
+            </AppText>
+          </TouchableOpacity>
+          <AppText size={14} color={colors.caption} style={{ marginHorizontal: 8 }}>
+            •
+          </AppText>
+          <TouchableOpacity
+            onPress={() => {
+              // Link to Terms of Use - using Apple's standard EULA
+              Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/');
+            }}
+            style={styles.linkButton}
+          >
+            <AppText size={14} color={colors.primary} fontWeight="medium">
+              Terms of Use
+            </AppText>
+          </TouchableOpacity>
+        </View>
+
         {/* Info Text */}
         <AppText
           size={12}
           color={colors.caption}
-          style={{ textAlign: 'center', marginBottom: 24 }}
+          style={{ textAlign: 'center', marginBottom: 24, marginTop: 16 }}
         >
           Subscriptions will auto-renew unless cancelled at least 24 hours before the
           end of the current period. Manage subscriptions in your Apple ID settings.
@@ -357,8 +447,8 @@ const useStyles = (
       backgroundColor: colors.primary + '10',
     },
     currentPlanCard: {
-      borderColor: colors.success,
-      backgroundColor: colors.success + '10',
+      borderColor: colors.green,
+      backgroundColor: colors.lightGreen,
     },
     planHeader: {
       flexDirection: 'row',
@@ -366,7 +456,7 @@ const useStyles = (
       alignItems: 'flex-start',
     },
     currentBadge: {
-      backgroundColor: colors.success,
+      backgroundColor: colors.green,
       paddingHorizontal: 12,
       paddingVertical: 6,
       borderRadius: 20,
@@ -377,5 +467,38 @@ const useStyles = (
       alignItems: 'center',
       justifyContent: 'center',
       padding: 40,
+    },
+    benefitsCard: {
+      backgroundColor: colors.background,
+      padding: 16,
+      borderRadius: 12,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    benefitItem: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginTop: 8,
+    },
+    bullet: {
+      marginRight: 8,
+      fontSize: 16,
+      color: colors.primary,
+    },
+    benefitText: {
+      flex: 1,
+      fontSize: 14,
+      color: colors.text,
+    },
+    linksContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 16,
+      marginBottom: 8,
+    },
+    linkButton: {
+      paddingVertical: 4,
     },
   });
