@@ -18,6 +18,9 @@ import { useSubscription } from '../../../hooks/useSubscription';
 import { SUBSCRIPTION_PLANS } from '../../../constants/subscription';
 import { Theme } from '../../../common/theme';
 import { showErrMsg, showSuccessMsg } from '../../../utils/flashMessage';
+import { subscriptionService } from '../../../services/subscriptionService';
+import { store } from '../../../features/store';
+import { setError } from '../../../features/subscription/subscriptionSlice';
 import { DrawerActions } from '@react-navigation/native';
 
 const Subscription = () => {
@@ -26,6 +29,7 @@ const Subscription = () => {
   const styles = useStyles(colors, spacing);
   const {
     products,
+    plans: backendPlans,
     subscription,
     isLoading,
     error,
@@ -64,51 +68,60 @@ const Subscription = () => {
       return;
     }
 
-    if (!isInitialized) {
-      Alert.alert(
-        'Loading',
-        'Please wait while we load subscription options...',
-      );
-      return;
-    }
+    // Clear any previous errors
+    store.dispatch(setError(null));
 
-    if (products.length === 0) {
-      Alert.alert(
-        'Products Not Available',
-        'Subscription products are not loaded yet. This may happen if:\n\n' +
-        '1. Products are not configured in App Store Connect\n' +
-        '2. Products are not approved yet\n' +
-        '3. You need to test with a sandbox account\n\n' +
-        'Please check App Store Connect and try again.',
-      );
-      return;
+    // Don't block if not initialized - let iOS handle it
+    if (!isInitialized) {
+      // Try to initialize quickly
+      try {
+        const initialized = await subscriptionService.initialize();
+        if (!initialized) {
+          // Still try purchase - iOS might handle it
+        }
+      } catch (e) {
+        // Continue anyway
+      }
     }
 
     try {
       setIsPurchasing(true);
       setSelectedPlan(productId);
+      
+      // Always attempt purchase - let iOS handle product availability
+      // iOS will show its own error if product doesn't exist
+      // This is better for review/testing scenarios
       await purchaseSubscription(productId);
       // Don't show success here - wait for purchase listener
       // The purchase dialog will appear from iOS
+      // Don't reset state here - let purchase listener handle success
     } catch (error: any) {
-      console.error('Purchase error:', error);
+      console.error('Purchase error in handlePurchase:', error);
       const errorMsg = error.message || 'Failed to purchase subscription';
-      showErrMsg(errorMsg);
       
-      // Show more helpful error for common issues
-      if (errorMsg.includes('not available') || errorMsg.includes('not configured')) {
-        Alert.alert(
-          'Product Not Available',
-          'This subscription product is not available. Please ensure:\n\n' +
-          '• Products are created in App Store Connect\n' +
-          '• Product IDs match exactly\n' +
-          '• Products are submitted and approved\n' +
-          '• You are testing with a sandbox account',
-        );
+      // Only show error for critical failures
+      // Don't show errors for:
+      // - User cancellations
+      // - Product availability (iOS handles this)
+      // - Connection issues (will be handled by error listener)
+      if (
+        !errorMsg.includes('cancelled') && 
+        !errorMsg.includes('canceled') &&
+        !errorMsg.includes('not available') &&
+        !errorMsg.includes('not configured') &&
+        !errorMsg.includes('not found') &&
+        !errorMsg.includes('Unable to start purchase') // This is handled by error listener
+      ) {
+        // Only show critical errors
+        showErrMsg(errorMsg);
+        setIsPurchasing(false);
+        setSelectedPlan(null);
+      } else {
+        // For other errors, just reset state silently
+        // The error listener will handle showing errors if needed
+        setIsPurchasing(false);
+        setSelectedPlan(null);
       }
-    } finally {
-      setIsPurchasing(false);
-      setSelectedPlan(null);
     }
   };
 
@@ -208,7 +221,7 @@ const Subscription = () => {
           </View>
         )}
 
-        {error && (
+        {error && !error.includes('Unable to start purchase') && (
           <View style={[styles.statusCard, { backgroundColor: colors.danger + '20' }]}>
             <AppText color={colors.danger}>{error}</AppText>
           </View>

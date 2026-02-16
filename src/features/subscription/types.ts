@@ -10,6 +10,15 @@ export interface SubscriptionStatus {
   productId: string | null;
 }
 
+// Backend subscription format (from API)
+export interface BackendSubscription {
+  plan_type: 'premium' | 'family';
+  period: 'monthly' | 'annual';
+  expires_at: string;
+  is_active: boolean;
+  product_id?: string;
+}
+
 export interface PurchaseReceipt {
   transactionReceipt: string;
   productId: string;
@@ -18,7 +27,6 @@ export interface PurchaseReceipt {
 }
 
 export interface VerifyReceiptRequest {
-  receipt_data: string;
   product_id: string;
   transaction_id: string;
   original_transaction_id?: string;
@@ -33,6 +41,19 @@ export interface VerifyReceiptResponse {
     is_active: boolean;
   };
   message?: string;
+}
+
+export interface SubscriptionPlan {
+  product_id: string;
+  name: string;
+  plan_type: 'premium' | 'family';
+  period: 'monthly' | 'annual';
+  platform: 'apple';
+  price_display: string;
+}
+
+export interface PlansResponse {
+  plans: SubscriptionPlan[];
 }
 
 export interface RestorePurchasesResponse {

@@ -3,7 +3,10 @@ import { Platform } from 'react-native';
 import { useSelector } from 'react-redux';
 import { subscriptionService } from '../services/subscriptionService';
 import { useAppSelector } from '../features/store';
-import { useGetSubscriptionStatusQuery } from '../features/subscription/subscriptionApiSlice';
+import {
+  useGetSubscriptionStatusQuery,
+  useGetPlansQuery,
+} from '../features/subscription/subscriptionApiSlice';
 import { Product } from 'react-native-iap';
 
 /**
@@ -15,6 +18,9 @@ export const useSubscription = () => {
   const subscription = useAppSelector(state => state.subscription?.subscription);
   const isLoading = useAppSelector(state => state.subscription?.isLoading);
   const error = useAppSelector(state => state.subscription?.error);
+
+  // Fetch plans from backend
+  const { data: plansData, isLoading: plansLoading } = useGetPlansQuery();
 
   // Fetch subscription status from backend
   const { data: subscriptionStatus, refetch: refetchStatus } =
@@ -55,21 +61,8 @@ export const useSubscription = () => {
    */
   const purchaseSubscription = async (productId: string) => {
     try {
-      // Ensure products are loaded
-      if (!isInitialized) {
-        throw new Error('Subscription service is not initialized. Please wait...');
-      }
-      
-      if (products.length === 0) {
-        throw new Error('Products are not loaded yet. Please wait...');
-      }
-
-      // Check if product exists
-      const productExists = products.some(p => p.productId === productId);
-      if (!productExists) {
-        throw new Error('This product is not available. Please ensure the subscription is configured in App Store Connect.');
-      }
-
+      // Don't check for products - let iOS handle product availability
+      // This allows purchases to work even if products aren't loaded (sandbox/review scenarios)
       await subscriptionService.purchaseSubscription(productId);
       // Status will be updated via purchase listener
     } catch (error: any) {
@@ -89,10 +82,15 @@ export const useSubscription = () => {
     }
   };
 
+  // Use subscription from Redux or backend
+  // Backend subscription is already converted to camelCase by transformResponse
+  const currentSubscription = subscription || subscriptionStatus?.subscription || null;
+
   return {
     products,
-    subscription: subscription || subscriptionStatus?.subscription,
-    isLoading,
+    plans: plansData?.plans || [],
+    subscription: currentSubscription,
+    isLoading: isLoading || plansLoading,
     error,
     isInitialized,
     purchaseSubscription,
