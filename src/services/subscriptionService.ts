@@ -323,28 +323,23 @@ class SubscriptionService {
           return;
         }
         
-        // For other errors, don't throw - let the purchase error listener handle it
-        // The error listener will show appropriate messages
+        // For other errors, rethrow so the UI can clear the loading state
         console.error('Purchase request failed, error listener will handle:', errorMessage);
-        // Don't set error here - let the error listener handle it
-        return;
+        throw purchaseError;
       }
     } catch (error: any) {
       console.error('Error purchasing subscription (outer catch):', error);
-      const errorMessage = error.message || 'Purchase failed';
+      const errorMessage = error?.message || 'Purchase failed';
       
-      // Don't set error in Redux - let the error listener handle it
-      // Only throw if it's a critical initialization error
       if (errorMessage.includes('Failed to initialize')) {
         store.dispatch(setError(errorMessage));
         store.dispatch(setLoading(false));
         throw error;
       }
       
-      // For other errors, don't set in Redux and don't throw
-      // The purchase error listener will handle showing errors if needed
+      // Rethrow purchase errors so the UI can clear the loading spinner
       store.dispatch(setLoading(false));
-      // Don't throw - errors are handled by listeners
+      throw error;
     }
   }
 

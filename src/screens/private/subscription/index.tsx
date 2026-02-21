@@ -43,6 +43,14 @@ const Subscription = () => {
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
 
+  // Clear loader when Redux error is set (e.g. from purchase error listener)
+  useEffect(() => {
+    if (error) {
+      setIsPurchasing(false);
+      setSelectedPlan(null);
+    }
+  }, [error]);
+
   // Capture console logs for debugging
   useEffect(() => {
     if (__DEV__) {
@@ -151,41 +159,28 @@ const Subscription = () => {
       await purchaseSubscription(productId);
       // Don't show success here - wait for purchase listener
       // The purchase dialog will appear from iOS
-      // Note: Don't reset state here - let purchase listener handle success/failure
-      // But add a timeout to reset if nothing happens
+      // Fallback: clear loader after 15s if nothing happened (e.g. purchase dialog never appears or error not thrown)
       setTimeout(() => {
-        if (isPurchasing) {
-          console.warn('Purchase timeout - resetting state');
-          setIsPurchasing(false);
-          setSelectedPlan(null);
-        }
-      }, 30000); // 30 second timeout
+        setIsPurchasing(false);
+        setSelectedPlan(null);
+      }, 15000);
     } catch (error: any) {
       console.error('Purchase error in handlePurchase:', error);
-      const errorMsg = error.message || 'Failed to purchase subscription';
-      
-      // Only show error for critical failures
-      // Don't show errors for:
-      // - User cancellations
-      // - Product availability (iOS handles this)
-      // - Connection issues (will be handled by error listener)
+      const errorMsg = error?.message || 'Failed to purchase subscription';
+      // Always clear loader on any purchase error
+      setIsPurchasing(false);
+      setSelectedPlan(null);
+      // Only show error for critical failures (not cancellations or product unavailable)
       if (
-        !errorMsg.includes('cancelled') && 
+        !errorMsg.includes('cancelled') &&
         !errorMsg.includes('canceled') &&
         !errorMsg.includes('not available') &&
         !errorMsg.includes('not configured') &&
         !errorMsg.includes('not found') &&
-        !errorMsg.includes('Unable to start purchase') // This is handled by error listener
+        !errorMsg.includes('Missing purchase request configuration') &&
+        !errorMsg.includes('Unable to start purchase')
       ) {
-        // Only show critical errors
         showErrMsg(errorMsg);
-        setIsPurchasing(false);
-        setSelectedPlan(null);
-      } else {
-        // For other errors, just reset state silently
-        // The error listener will handle showing errors if needed
-        setIsPurchasing(false);
-        setSelectedPlan(null);
       }
     }
   };
