@@ -58,13 +58,18 @@ class SubscriptionService {
     this.purchaseUpdateSubscription = purchaseUpdatedListener(
       async (purchase: Purchase) => {
         try {
-          console.log('Purchase successful:', purchase);
+          console.log('Purchase successful, processing...', purchase);
           await this.handlePurchase(purchase);
           // Finish the transaction
+          console.log('Finishing transaction...');
           await finishTransaction({ purchase, isConsumable: false });
-        } catch (error) {
-          console.error('Error handling purchase:', error);
-          store.dispatch(setError('Failed to process purchase'));
+          console.log('Transaction finished successfully');
+        } catch (error: any) {
+          console.error('Error handling purchase in listener:', error);
+          // Make sure loading is reset even on error
+          store.dispatch(setLoading(false));
+          const errorMsg = error.message || 'Failed to process purchase';
+          store.dispatch(setError(errorMsg));
         }
       },
     );
@@ -142,24 +147,38 @@ class SubscriptionService {
 
       const result = await verifyReceipt;
       
+      console.log('Receipt verification result:', {
+        success: result.data?.success,
+        subscription: result.data?.subscription,
+        error: result.error,
+      });
+      
       if (result.data?.success && result.data.subscription) {
+        // Convert backend snake_case to app camelCase
+        const sub = result.data.subscription;
         const subscription: SubscriptionStatus = {
-          isActive: result.data.subscription.is_active,
-          planType: result.data.subscription.plan_type,
-          period: result.data.subscription.period,
-          expiresAt: result.data.subscription.expires_at,
+          isActive: sub.is_active,
+          planType: sub.plan_type,
+          period: sub.period,
+          expiresAt: sub.expires_at,
           productId: productId,
         };
+        console.log('Subscription verified successfully:', subscription);
         store.dispatch(setSubscription(subscription));
+        store.dispatch(setLoading(false));
       } else {
-        throw new Error(result.data?.message || 'Receipt verification failed');
+        const errorMsg = result.data?.message || (result.error as any)?.message || 'Failed to verify purchase';
+        console.error('Receipt verification failed:', errorMsg);
+        store.dispatch(setError(errorMsg));
+        store.dispatch(setLoading(false));
+        // Don't throw - just log the error
       }
     } catch (error: any) {
       console.error('Error verifying receipt:', error);
-      store.dispatch(setError(error.message || 'Failed to verify purchase'));
-      throw error;
-    } finally {
+      const errorMsg = error?.message || error?.response?.data?.message || String(error) || 'Failed to verify purchase';
+      store.dispatch(setError(errorMsg));
       store.dispatch(setLoading(false));
+      // Don't throw - let the UI handle the error
     }
   }
 
@@ -199,7 +218,47 @@ class SubscriptionService {
 
       console.log('Attempting to purchase product:', productId);
       
-      // Request purchase directly - iOS will handle everything
+      // First, ensure products are loaded (required for requestPurchase)
+      // This is critical - requestPurchase will fail without products loaded
+      const productIds = getAllProductIds();
+      console.log('Fetching products before purchase...', productIds);
+      
+      try {
+        const fetchedProducts = await fetchProducts({ skus: productIds });
+        const availableProducts = (fetchedProducts || []) as any[];
+        console.log('Available products fetched:', availableProducts.length);
+        
+        if (availableProducts.length > 0) {
+          // Check if the specific product exists
+          const product = availableProducts.find((p: any) => {
+            const id = p.productId || p.productIdentifier || (p as any).product_id;
+            return id === productId;
+          });
+          
+          if (product) {
+            const foundId = product.productId || product.productIdentifier || (product as any).product_id;
+            console.log('Product found:', foundId);
+          } else {
+            const availableIds = availableProducts.map((p: any) => 
+              p.productId || p.productIdentifier || (p as any).product_id
+            );
+            console.warn(`Product ${productId} not found in available products. Available:`, availableIds);
+            console.warn('This may happen if subscriptions are still in review.');
+          }
+        } else {
+          console.warn('No products returned from App Store. This may happen if:');
+          console.warn('1. Subscriptions are still in review (Waiting for Review)');
+          console.warn('2. Products are not configured correctly in App Store Connect');
+          console.warn('3. You need to test with a sandbox account');
+          // Don't throw - try purchase anyway, might work in sandbox
+        }
+      } catch (fetchError: any) {
+        console.error('Error fetching products:', fetchError);
+        console.warn('Continuing with purchase attempt anyway - might work in sandbox');
+        // Continue anyway - might work in sandbox even if fetch fails
+      }
+      
+      // Request purchase - iOS will handle everything
       try {
         console.log('Calling requestPurchase with productId:', productId);
         const result = await requestPurchase({ 

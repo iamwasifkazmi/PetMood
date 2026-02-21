@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -8,6 +8,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   View,
+  Text,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AppText from '../../../components/Text/AppText';
@@ -40,6 +41,62 @@ const Subscription = () => {
 
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+
+  // Capture console logs for debugging
+  useEffect(() => {
+    if (__DEV__) {
+      const originalLog = console.log;
+      const originalError = console.error;
+      const originalWarn = console.warn;
+      
+      const addLog = (prefix: string, args: any[]) => {
+        const logMessage = args.map(arg => {
+          if (typeof arg === 'object') {
+            try {
+              return JSON.stringify(arg, null, 2);
+            } catch {
+              return String(arg);
+            }
+          }
+          return String(arg);
+        }).join(' ');
+        
+        if (
+          logMessage.toLowerCase().includes('purchase') || 
+          logMessage.toLowerCase().includes('subscription') ||
+          logMessage.toLowerCase().includes('iap') ||
+          logMessage.toLowerCase().includes('receipt') ||
+          logMessage.toLowerCase().includes('transaction') ||
+          logMessage.toLowerCase().includes('product')
+        ) {
+          const timestamp = new Date().toLocaleTimeString();
+          setDebugLogs(prev => [...prev.slice(-19), `[${timestamp}] ${prefix} ${logMessage}`]);
+        }
+      };
+      
+      console.log = (...args: any[]) => {
+        originalLog(...args);
+        addLog('[LOG]', args);
+      };
+      
+      console.error = (...args: any[]) => {
+        originalError(...args);
+        addLog('[ERROR]', args);
+      };
+      
+      console.warn = (...args: any[]) => {
+        originalWarn(...args);
+        addLog('[WARN]', args);
+      };
+      
+      return () => {
+        console.log = originalLog;
+        console.error = originalError;
+        console.warn = originalWarn;
+      };
+    }
+  }, []);
 
   // Get product price from Apple (if available)
   const getProductPrice = (productId: string): string => {
@@ -94,7 +151,15 @@ const Subscription = () => {
       await purchaseSubscription(productId);
       // Don't show success here - wait for purchase listener
       // The purchase dialog will appear from iOS
-      // Don't reset state here - let purchase listener handle success
+      // Note: Don't reset state here - let purchase listener handle success/failure
+      // But add a timeout to reset if nothing happens
+      setTimeout(() => {
+        if (isPurchasing) {
+          console.warn('Purchase timeout - resetting state');
+          setIsPurchasing(false);
+          setSelectedPlan(null);
+        }
+      }, 30000); // 30 second timeout
     } catch (error: any) {
       console.error('Purchase error in handlePurchase:', error);
       const errorMsg = error.message || 'Failed to purchase subscription';
@@ -224,6 +289,44 @@ const Subscription = () => {
         {error && !error.includes('Unable to start purchase') && (
           <View style={[styles.statusCard, { backgroundColor: colors.danger + '20' }]}>
             <AppText color={colors.danger}>{error}</AppText>
+          </View>
+        )}
+
+        {/* Debug Logs - Always show in Development */}
+        {__DEV__ && (
+          <View style={[styles.statusCard, { backgroundColor: '#00000020' }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <AppText fontWeight="bold" size={12}>
+                Debug Logs ({debugLogs.length}):
+              </AppText>
+              <TouchableOpacity
+                onPress={() => setDebugLogs([])}
+                style={{ padding: 4, paddingHorizontal: 8, backgroundColor: colors.primary + '20', borderRadius: 4 }}
+              >
+                <AppText size={10} color={colors.primary}>Clear</AppText>
+              </TouchableOpacity>
+            </View>
+            {debugLogs.length === 0 ? (
+              <AppText size={10} color={colors.caption} style={{ fontStyle: 'italic' }}>
+                No logs yet. Tap a plan to see purchase logs here.
+              </AppText>
+            ) : (
+              <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }}>
+                {debugLogs.map((log, index) => (
+                  <AppText 
+                    key={index} 
+                    size={10} 
+                    style={{ 
+                      marginBottom: 2, 
+                      fontFamily: 'monospace',
+                      color: log.includes('[ERROR]') ? colors.danger : colors.text
+                    }}
+                  >
+                    {log}
+                  </AppText>
+                ))}
+              </ScrollView>
+            )}
           </View>
         )}
 
