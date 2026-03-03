@@ -34,7 +34,7 @@
 	<key>NSAppleMusicUsageDescription</key>
 	<string>We need access to play audio</string>
 	<key>NSCameraUsageDescription</key>
-	<string>$(PRODUCT_NAME) needs access to your camera to take photos</string>
+	<string>  We use your camera to capture pet photos and videos so our AI can analyze your pet’s emotions and show scan results.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Give $(PRODUCT_NAME) permission to use your microphone. Your record wont be shared without your permission.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

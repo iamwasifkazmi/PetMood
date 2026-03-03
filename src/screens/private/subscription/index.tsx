@@ -364,7 +364,9 @@ const Subscription = () => {
                 isSelected && styles.selectedPlanCard,
               ]}
               onPress={() => handlePurchase(plan.productId)}
-              disabled={isPurchasing || isCurrentPlan || !isInitialized}
+              // Allow tap even if IAP isn't fully initialized yet;
+              // handlePurchase will lazily initialize and handle errors.
+              disabled={isPurchasing || isCurrentPlan}
             >
               <View style={styles.planHeader}>
                 <View style={{ flex: 1 }}>
@@ -432,7 +434,9 @@ const Subscription = () => {
                 isSelected && styles.selectedPlanCard,
               ]}
               onPress={() => handlePurchase(plan.productId)}
-              disabled={isPurchasing || isCurrentPlan || !isInitialized}
+              // Allow tap even if IAP isn't fully initialized yet;
+              // handlePurchase will lazily initialize and handle errors.
+              disabled={isPurchasing || isCurrentPlan}
             >
               <View style={styles.planHeader}>
                 <View style={{ flex: 1 }}>
@@ -483,7 +487,9 @@ const Subscription = () => {
           type="outlined"
           onPress={handleRestore}
           loading={isPurchasing}
-          disabled={!isInitialized || Platform.OS !== 'ios'}
+          // Allow restore on iOS even if IAP hasn't fully initialized;
+          // backend restore endpoint and hook will handle errors.
+          disabled={Platform.OS !== 'ios' || isPurchasing}
           style={{ marginTop: 32, marginBottom: 24 }}
         />
 

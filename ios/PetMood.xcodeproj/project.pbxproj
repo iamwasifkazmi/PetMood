@@ -346,10 +346,11 @@
 			baseConfigurationReference = 3771BC0FFCF5640EE05DB63E /* Pods-PetMood.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				DEVELOPMENT_TEAM = 522Z2ZQ3X5;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = PetMood/Info.plist;
@@ -360,7 +361,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.62;
+				MARKETING_VERSION = 1.7.5;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -380,10 +381,11 @@
 			baseConfigurationReference = 5C8C4E0B8B1678DB6295FDA8 /* Pods-PetMood.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				DEVELOPMENT_TEAM = 522Z2ZQ3X5;
 				INFOPLIST_FILE = PetMood/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = AIPETMOOD;
@@ -393,7 +395,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.62;
+				MARKETING_VERSION = 1.7.5;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
