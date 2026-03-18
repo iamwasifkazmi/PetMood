@@ -24,6 +24,7 @@ import { userApiSlice } from './user/userApiSlice';
 import { userSlice } from './user/userSlice';
 import { subscriptionApiSlice } from './subscription/subscriptionApiSlice';
 import subscriptionSlice from './subscription/subscriptionSlice';
+import { privacyApiSlice } from './privacy/privacyApiSlice';
 
 const rootReducer = combineSlices(
   tabBarSlice,
@@ -41,6 +42,7 @@ const rootReducer = combineSlices(
   userSlice,
   subscriptionApiSlice,
   subscriptionSlice,
+  privacyApiSlice,
 );
 
 // Infer the `RootState` type from the root reducer
@@ -80,6 +82,7 @@ export const store = configureStore({
       scanningApiSlice.middleware,
       userApiSlice.middleware,
       subscriptionApiSlice.middleware,
+      privacyApiSlice.middleware,
     ),
 });
 

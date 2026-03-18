@@ -209,6 +209,79 @@ export const cummunityApiSlice = createApi({
         }
       },
     }),
+
+    reportPost: build.mutation<{ reported: boolean; reportId?: string }, { postId: string; reason: string }>({
+      query: ({ postId, reason }) => ({
+        url: `community/posts/${postId}/report`,
+        method: 'post',
+        data: { reason },
+      }),
+    }),
+
+    reportComment: build.mutation<
+      { reported: boolean; reportId?: string },
+      { postId: string; commentId: string; reason: string }
+    >({
+      query: ({ postId, commentId, reason }) => ({
+        url: `community/comments/${postId}/${commentId}/report`,
+        method: 'post',
+        data: { reason },
+      }),
+    }),
+
+    blockUser: build.mutation<
+      { blocked: boolean; targetUid: string; reportId?: string },
+      { targetUid: string; reason: string; postIdForCommentsPatch?: string }
+    >({
+      query: ({ targetUid, reason }) => ({
+        url: `community/users/${targetUid}/block`,
+        method: 'post',
+        data: { reason },
+      }),
+      async onQueryStarted({ targetUid, postIdForCommentsPatch }, { dispatch, queryFulfilled }) {
+        // Optimistically remove blocked user's posts from main feeds
+        const patchAll = dispatch(
+          cummunityApiSlice.util.updateQueryData(
+            'getCummunityPosts',
+            { limit: 20, offset: 0 },
+            draft => {
+              return draft.filter(p => p.authorId !== targetUid) as any;
+            },
+          ) as any,
+        );
+        const patchMy = dispatch(
+          cummunityApiSlice.util.updateQueryData(
+            'getMyCommunityPosts',
+            { limit: 20, offset: 0 },
+            draft => {
+              return draft.filter(p => p.authorId !== targetUid) as any;
+            },
+          ) as any,
+        );
+
+        // If a comments thread is open, remove blocked user's comments in that thread too
+        const patchComments =
+          postIdForCommentsPatch
+            ? dispatch(
+                cummunityApiSlice.util.updateQueryData(
+                  'getCommunityComments',
+                  { postId: postIdForCommentsPatch, limit: 20, offset: 0 },
+                  draft => {
+                    return draft.filter((c: any) => c.authorId !== targetUid) as any;
+                  },
+                ) as any,
+              )
+            : null;
+
+        try {
+          await queryFulfilled;
+        } catch {
+          patchAll?.undo?.();
+          patchMy?.undo?.();
+          patchComments?.undo?.();
+        }
+      },
+    }),
   }),
 });
 
@@ -223,4 +296,7 @@ export const {
   useCreateCommunityPostMutation,
   useDeleteCommunityPostMutation,
   useGetPostLikesQuery,
+  useReportPostMutation,
+  useReportCommentMutation,
+  useBlockUserMutation,
 } = cummunityApiSlice;

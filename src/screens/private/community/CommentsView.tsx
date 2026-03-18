@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Alert,
   FlatList,
   Image,
   StyleSheet,
@@ -20,6 +21,9 @@ import AntDesign from 'react-native-vector-icons/AntDesign';
 import AppText from '../../../components/Text/AppText';
 import moment from 'moment';
 import { RootState } from '../../../features/store';
+import Entypo from 'react-native-vector-icons/Entypo';
+import { useBlockUserMutation, useReportCommentMutation } from '../../../features/cummunity/cummunityApiSlice';
+import { showSuccessMsg } from '../../../utils/flashMessage';
 
 interface Props {
   onClose: () => void;
@@ -27,6 +31,7 @@ interface Props {
   loading?: boolean;
   comments: getCommentRes[];
   isCommenting?: boolean;
+  postId?: string;
 }
 const CommentsView = ({
   onClose,
@@ -34,12 +39,45 @@ const CommentsView = ({
   loading,
   comments,
   isCommenting,
+  postId,
 }: Props) => {
   const { colors, spacing, fonts } = useTheme();
   const styles = useStyles(colors, spacing, fonts);
   const { user } = useSelector((state: RootState) => state.user);
 
   const [comment, setComment] = useState('');
+  const [reportComment] = useReportCommentMutation();
+  const [blockUser] = useBlockUserMutation();
+
+  const onMenuPress = (commentItem: getCommentRes) => {
+    if (!postId) return;
+    Alert.alert('Actions', undefined, [
+      {
+        text: 'Report Comment',
+        onPress: async () => {
+          await reportComment({
+            postId,
+            commentId: commentItem.id,
+            reason: 'Harassment',
+          }).unwrap();
+          showSuccessMsg("Thanks, we’ll review this.");
+        },
+      },
+      {
+        text: 'Block User',
+        style: 'destructive',
+        onPress: async () => {
+          await blockUser({
+            targetUid: commentItem.authorId,
+            reason: 'Harassment',
+            postIdForCommentsPatch: postId,
+          }).unwrap();
+          showSuccessMsg('User blocked.');
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
 
   const renderComment = ({ item }: { item: getCommentRes }) => (
     <View style={styles.commentRow}>
@@ -64,6 +102,14 @@ const CommentsView = ({
         </View>
         <AppText size={12}>{item?.content}</AppText>
       </View>
+      {item.authorId !== user?.uid && !!postId && (
+        <TouchableOpacity
+          onPress={() => onMenuPress(item)}
+          style={{ paddingHorizontal: 6, paddingVertical: 6 }}
+        >
+          <Entypo name="dots-three-vertical" size={16} color={colors.caption} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 

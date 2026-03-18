@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -30,6 +30,12 @@ import {
 import { getStaticFeatureFlag } from 'react-native-worklets';
 import { useGetAllProfilesQuery } from '../../../features/pet/petApiSlice';
 import { showErrMsg } from '../../../utils/flashMessage';
+import AiConsentModal from '../../../components/modals/AiConsentModal';
+import {
+  useLazyGetAiConsentQuery,
+  useSetAiConsentMutation,
+} from '../../../features/privacy/privacyApiSlice';
+import { AiProviderKey } from '../../../features/privacy/types';
 
 const Scanner = () => {
   const { colors, spacing } = useTheme();
@@ -55,11 +61,62 @@ const Scanner = () => {
   const [scanResult, setScanResult] = useState<CreateScanRes>(
     {} as CreateScanRes,
   );
+
+  // AI consent state
+  const [consentVisible, setConsentVisible] = useState(false);
+  const [requiredProvider, setRequiredProvider] = useState<AiProviderKey | null>(null);
+  const [pendingRetry, setPendingRetry] = useState<{
+    fileUri: string;
+    mediaType: 'audio' | 'video' | 'image';
+  } | null>(null);
+
+  const [fetchAiConsent, aiConsentQuery] = useLazyGetAiConsentQuery();
+  const [setAiConsent, setAiConsentState] = useSetAiConsentMutation();
+
+  const openConsent = async (provider?: string) => {
+    setRequiredProvider((provider as AiProviderKey) || null);
+    setConsentVisible(true);
+    try {
+      await fetchAiConsent().unwrap();
+    } catch {
+      // ignore; modal can still show with generic copy
+    }
+  };
+
+  const getRequiredProviderForMedia = (
+    mediaType: 'audio' | 'video' | 'image',
+  ): AiProviderKey | null => {
+    // Backend disclosure: images -> nyckel, audio -> assemblyai.
+    // Video uses the image/video analysis pipeline; update if your backend differs.
+    if (mediaType === 'audio') return 'assemblyai';
+    return 'nyckel';
+  };
+
   const handleUploadScan = async (
     fileUri: string,
     mediaType: 'audio' | 'video' | 'image',
   ) => {
     try {
+      // ✅ Ask for consent BEFORE first scan / before any upload
+      const required = getRequiredProviderForMedia(mediaType);
+      try {
+        const res = await fetchAiConsent().unwrap();
+        const granted = !!res?.consent?.granted;
+        const providers = (res?.consent?.providers || []) as AiProviderKey[];
+        const providerAllowed = required ? providers.includes(required) : granted;
+
+        if (!granted || !providerAllowed) {
+          setPendingRetry({ fileUri, mediaType });
+          await openConsent(required || undefined);
+          return;
+        }
+      } catch {
+        // If we can't fetch consent, fail closed: require explicit consent before scanning
+        setPendingRetry({ fileUri, mediaType });
+        await openConsent(required || undefined);
+        return;
+      }
+
       console.log('⬆️ Uploading scan:', fileUri);
       const response = await createScan({
         petId: selectedPet,
@@ -85,6 +142,10 @@ const Scanner = () => {
     } catch (error: any) {
       console.log('❌ Upload failed:', error);
       if (error?.status === 403) {
+        const data = error?.data || {};
+        const provider = data?.requiredProvider as string | undefined;
+        setPendingRetry({ fileUri, mediaType });
+        await openConsent(provider);
         return;
       }
       Alert.alert(
@@ -116,7 +177,23 @@ const Scanner = () => {
       showErrMsg('Please select a pet to upload the scan.');
       return;
     }
-    setIsRecordingView(true);
+    // Show consent before the user starts any scan flow
+    (async () => {
+      try {
+        const res = await fetchAiConsent().unwrap();
+        const granted = !!res?.consent?.granted;
+        if (!granted) {
+          setPendingRetry(null);
+          await openConsent(undefined);
+          return;
+        }
+        setIsRecordingView(true);
+      } catch {
+        // If consent state cannot be fetched, require explicit consent
+        setPendingRetry(null);
+        await openConsent(undefined);
+      }
+    })();
   };
 
   const handleBackPress = () => {
@@ -177,6 +254,33 @@ const Scanner = () => {
   return (
     <View style={{ flex: 1 }}>
       <Header />
+      <AiConsentModal
+        visible={consentVisible}
+        loading={aiConsentQuery.isFetching || setAiConsentState.isLoading}
+        disclosure={aiConsentQuery.data?.disclosure}
+        initialEnabledProviders={(aiConsentQuery.data?.consent?.providers || []) as AiProviderKey[]}
+        requiredProvider={requiredProvider}
+        onClose={() => {
+          setConsentVisible(false);
+          setPendingRetry(null);
+          setRequiredProvider(null);
+          showErrMsg('You can enable AI analysis in Settings anytime.');
+        }}
+        onSubmit={async providers => {
+          try {
+            await setAiConsent({ granted: true, providers }).unwrap();
+            setConsentVisible(false);
+            const retry = pendingRetry;
+            setPendingRetry(null);
+            setRequiredProvider(null);
+            if (retry) {
+              await handleUploadScan(retry.fileUri, retry.mediaType);
+            }
+          } catch (e) {
+            showErrMsg('Unable to save consent. Please try again.');
+          }
+        }}
+      />
 
       <View style={{ flex: 1, padding: spacing.md, paddingBottom: 0 }}>
         {/* 🔹 Header with Back */}

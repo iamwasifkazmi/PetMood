@@ -37,9 +37,15 @@ import {
   useGetMyCommunityPostsQuery,
   useGetPostLikesQuery,
   useLikeCommunityPostMutation,
+  useReportPostMutation,
+  useBlockUserMutation,
 } from '../../../features/cummunity/cummunityApiSlice';
-import { CreatePostArg } from '../../../features/cummunity/types';
+import { CreatePostArg, CummunityRes } from '../../../features/cummunity/types';
 import LikesListView from './LikesListView';
+import { Alert } from 'react-native';
+import { showErrMsg, showSuccessMsg } from '../../../utils/flashMessage';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../../features/store';
 
 const Community = ({ navigation }: CommunityProps) => {
   const { colors, fonts, spacing } = useTheme();
@@ -63,6 +69,7 @@ const Community = ({ navigation }: CommunityProps) => {
   const [postId, setPostId] = useState<string>('');
   const [likesPostId, setLikesPostId] = useState<string>('');
   const [menuId, setMenuId] = useState<string>('');
+  const [menuPost, setMenuPost] = useState<CummunityRes | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [createCommunityPost, { isLoading: creatingPost }] =
     useCreateCommunityPostMutation();
@@ -113,6 +120,10 @@ const Community = ({ navigation }: CommunityProps) => {
   );
   const [deletePost, { isLoading: isDeleting }] =
     useDeleteCommunityPostMutation();
+  const [reportPost] = useReportPostMutation();
+  const [blockUser] = useBlockUserMutation();
+
+  const { user } = useSelector((state: RootState) => state.user);
 
   const [likeCommunityPost, { isLoading: isLiking }] =
     useLikeCommunityPostMutation();
@@ -132,6 +143,9 @@ const Community = ({ navigation }: CommunityProps) => {
     setCreatePost(false);
   };
   const handleMenu = (id: string) => {
+    const post =
+      (data || []).find(p => p.id === id) || (myPost || []).find(p => p.id === id) || null;
+    setMenuPost(post as any);
     setMenuId(id);
     bottomSheetRef?.current?.expand(), setIsPostUpload(false);
   };
@@ -178,6 +192,59 @@ const Community = ({ navigation }: CommunityProps) => {
       setIsPostUpload(false);
       setMenuId('');
     }
+  };
+
+  const promptReportPost = () => {
+    if (!menuPost?.id) return;
+    Alert.alert('Report Post', 'Select a reason', [
+      {
+        text: 'Harassment',
+        onPress: async () => {
+          await reportPost({ postId: menuPost.id, reason: 'Harassment' }).unwrap();
+          showSuccessMsg("Thanks, we’ll review this.");
+          bottomSheetRef?.current?.close();
+        },
+      },
+      {
+        text: 'Spam',
+        onPress: async () => {
+          await reportPost({ postId: menuPost.id, reason: 'Spam' }).unwrap();
+          showSuccessMsg("Thanks, we’ll review this.");
+          bottomSheetRef?.current?.close();
+        },
+      },
+      {
+        text: 'Other',
+        onPress: async () => {
+          await reportPost({ postId: menuPost.id, reason: 'Other' }).unwrap();
+          showSuccessMsg("Thanks, we’ll review this.");
+          bottomSheetRef?.current?.close();
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const promptBlockUser = () => {
+    if (!menuPost?.authorId) return;
+    if (menuPost.authorId === user?.uid) {
+      showErrMsg("You can’t block yourself.");
+      return;
+    }
+    Alert.alert('Block User', `Block ${menuPost.authorName}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Block',
+        style: 'destructive',
+        onPress: async () => {
+          await blockUser({ targetUid: menuPost.authorId, reason: 'Harassment' }).unwrap();
+          showSuccessMsg('User blocked.');
+          bottomSheetRef?.current?.close();
+          setMenuId('');
+          setMenuPost(null);
+        },
+      },
+    ]);
   };
   const handleCreatePost = async () => {
     try {
@@ -228,6 +295,7 @@ const Community = ({ navigation }: CommunityProps) => {
             isCommenting={createCommentLoading}
             onComment={handleCreateComment}
             onClose={() => setShowComments(false)}
+            postId={postId}
           />
         </ImageBackground>
       )}
@@ -380,32 +448,58 @@ const Community = ({ navigation }: CommunityProps) => {
           </AppText>
         )}
 
-        <PrimaryButton
-          title={isPostUpload ? 'Okay' : 'confirm'}
-          loading={isPostUpload ? false : isDeleting}
-          onPress={() => {
-            if (isPostUpload) {
-              // For success message, just close and reset
+        {isPostUpload ? (
+          <PrimaryButton
+            title="Okay"
+            loading={false}
+            onPress={() => {
               setIsPostUpload(false);
               setMenuId('');
-              bottomSheetRef?.current?.close();
-            } else {
-              // For delete confirmation, call handleAction
-              handleAction('confirm');
-              bottomSheetRef?.current?.close();
-            }
-          }}
-        />
-        {!isPostUpload && (
-          <PrimaryButton
-            style={{ marginTop: 16 }}
-            type="outlined"
-            title={'Cancel'}
-            onPress={() => {
-              handleAction('cancel');
+              setMenuPost(null);
               bottomSheetRef?.current?.close();
             }}
           />
+        ) : (
+          <>
+            {/* Delete only if it's the user's post */}
+            {menuPost?.authorId === user?.uid ? (
+              <PrimaryButton
+                title="Delete Post"
+                loading={isDeleting}
+                onPress={() => {
+                  handleAction('confirm');
+                  bottomSheetRef?.current?.close();
+                }}
+              />
+            ) : null}
+
+            <PrimaryButton
+              style={{ marginTop: 12 }}
+              type="outlined"
+              title="Report Post"
+              onPress={promptReportPost}
+            />
+
+            {menuPost?.authorId && menuPost.authorId !== user?.uid ? (
+              <PrimaryButton
+                style={{ marginTop: 12 }}
+                type="outlined"
+                title="Block User"
+                onPress={promptBlockUser}
+              />
+            ) : null}
+
+            <PrimaryButton
+              style={{ marginTop: 12 }}
+              type="outlined"
+              title="Close"
+              onPress={() => {
+                setMenuId('');
+                setMenuPost(null);
+                bottomSheetRef?.current?.close();
+              }}
+            />
+          </>
         )}
       </GlobalBottomSheet>
 

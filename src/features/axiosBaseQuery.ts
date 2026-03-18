@@ -75,9 +75,22 @@ const axiosBaseQuery =
         (err.response?.data as any)?.error?.message ||
         err.message;
 
-      // Show error message in UI
-      showErrMsg(detail);
-      if (status === 403) {
+      const isAiConsentRequired =
+        status === 403 &&
+        (typeof data === 'object' &&
+          data !== null &&
+          ('requiredProvider' in (data as any) ||
+            String((data as any)?.detail || detail)
+              .toLowerCase()
+              .includes('consent required')));
+
+      // Show error message in UI unless it's the consent-enforcement 403 (handled by the scanner UI)
+      if (!isAiConsentRequired) {
+        showErrMsg(detail);
+      }
+
+      // Only force logout on auth-related 403s (not on consent-enforcement)
+      if (status === 403 && !isAiConsentRequired) {
         store.dispatch({ type: 'LOGOUT' });
         store.dispatch(clearUser());
         resetToSplash(); // navigation to Splash
