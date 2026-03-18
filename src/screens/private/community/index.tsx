@@ -46,6 +46,7 @@ import { Alert } from 'react-native';
 import { showErrMsg, showSuccessMsg } from '../../../utils/flashMessage';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../../features/store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const Community = ({ navigation }: CommunityProps) => {
   const { colors, fonts, spacing } = useTheme();
@@ -71,6 +72,7 @@ const Community = ({ navigation }: CommunityProps) => {
   const [menuId, setMenuId] = useState<string>('');
   const [menuPost, setMenuPost] = useState<CummunityRes | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [hiddenPostIds, setHiddenPostIds] = useState<Record<string, true>>({});
   const [createCommunityPost, { isLoading: creatingPost }] =
     useCreateCommunityPostMutation();
   const dispatch = useAppDispatch();
@@ -124,6 +126,30 @@ const Community = ({ navigation }: CommunityProps) => {
   const [blockUser] = useBlockUserMutation();
 
   const { user } = useSelector((state: RootState) => state.user);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem('community_hidden_posts_v1');
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          setHiddenPostIds(parsed);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
+
+  const persistHidden = async (next: Record<string, true>) => {
+    setHiddenPostIds(next);
+    try {
+      await AsyncStorage.setItem('community_hidden_posts_v1', JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  };
 
   const [likeCommunityPost, { isLoading: isLiking }] =
     useLikeCommunityPostMutation();
@@ -245,6 +271,16 @@ const Community = ({ navigation }: CommunityProps) => {
         },
       },
     ]);
+  };
+
+  const hidePost = async () => {
+    if (!menuPost?.id) return;
+    const next = { ...hiddenPostIds, [menuPost.id]: true as const };
+    await persistHidden(next);
+    showSuccessMsg('Post hidden.');
+    setMenuId('');
+    setMenuPost(null);
+    bottomSheetRef?.current?.close();
   };
   const handleCreatePost = async () => {
     try {
@@ -403,7 +439,7 @@ const Community = ({ navigation }: CommunityProps) => {
               />
             ) : (
               <FlatList
-                data={isMyPostTab ? myPost : data}
+                data={(isMyPostTab ? myPost : data)?.filter(p => !hiddenPostIds[p.id])}
                 showsVerticalScrollIndicator={false}
                 keyExtractor={item => item.id}
                 renderItem={({ item }) => (
@@ -478,6 +514,13 @@ const Community = ({ navigation }: CommunityProps) => {
               type="outlined"
               title="Report Post"
               onPress={promptReportPost}
+            />
+
+            <PrimaryButton
+              style={{ marginTop: 12 }}
+              type="outlined"
+              title="Hide Post"
+              onPress={hidePost}
             />
 
             {menuPost?.authorId && menuPost.authorId !== user?.uid ? (
