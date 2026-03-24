@@ -275,6 +275,9 @@ const Scanner = () => {
             setRequiredProvider(null);
             if (retry) {
               await handleUploadScan(retry.fileUri, retry.mediaType);
+            } else {
+              // Consent opened from "Start Scan" (no pending upload yet)
+              setIsRecordingView(true);
             }
           } catch (e) {
             showErrMsg('Unable to save consent. Please try again.');

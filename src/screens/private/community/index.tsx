@@ -73,6 +73,8 @@ const Community = ({ navigation }: CommunityProps) => {
   const [menuPost, setMenuPost] = useState<CummunityRes | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [hiddenPostIds, setHiddenPostIds] = useState<Record<string, true>>({});
+  const [createPostInlineError, setCreatePostInlineError] = useState('');
+  const [createCommentInlineError, setCreateCommentInlineError] = useState('');
   const [createCommunityPost, { isLoading: creatingPost }] =
     useCreateCommunityPostMutation();
   const dispatch = useAppDispatch();
@@ -199,8 +201,17 @@ const Community = ({ navigation }: CommunityProps) => {
 
   const handleCreateComment = async (text: string) => {
     try {
+      setCreateCommentInlineError('');
       const res = await createComment({ postId, content: text }).unwrap();
-    } catch (err) {}
+    } catch (err: any) {
+      const detail =
+        err?.data?.detail || err?.data?.message || 'Unable to add comment.';
+      if (String(detail).toLowerCase().includes('violates community guidelines')) {
+        setCreateCommentInlineError('Your message contains prohibited content.');
+      } else {
+        setCreateCommentInlineError(String(detail));
+      }
+    }
   };
   const handleShare = (id: string) => console.log('Share post', id);
   const handleAction = (action: 'confirm' | 'cancel') => {
@@ -284,6 +295,7 @@ const Community = ({ navigation }: CommunityProps) => {
   };
   const handleCreatePost = async () => {
     try {
+      setCreatePostInlineError('');
       const payload = {
         content: createPostData.content,
         tags: createPostData.tags,
@@ -302,7 +314,15 @@ const Community = ({ navigation }: CommunityProps) => {
       });
       bottomSheetRef?.current?.expand();
       setCreatePost(false);
-    } catch (err) {}
+    } catch (err: any) {
+      const detail =
+        err?.data?.detail || err?.data?.message || 'Unable to create post.';
+      if (String(detail).toLowerCase().includes('violates community guidelines')) {
+        setCreatePostInlineError('Your message contains prohibited content.');
+      } else {
+        setCreatePostInlineError(String(detail));
+      }
+    }
   };
 
   useEffect(() => {
@@ -332,6 +352,7 @@ const Community = ({ navigation }: CommunityProps) => {
             onComment={handleCreateComment}
             onClose={() => setShowComments(false)}
             postId={postId}
+            commentErrorText={createCommentInlineError}
           />
         </ImageBackground>
       )}
@@ -352,6 +373,7 @@ const Community = ({ navigation }: CommunityProps) => {
           <CreatePostView
             formData={createPostData}
             setFormData={setCreatePostData}
+            errorText={createPostInlineError}
           />
           <PrimaryButton
             loading={creatingPost}

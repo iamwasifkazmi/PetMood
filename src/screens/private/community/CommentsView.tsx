@@ -32,6 +32,7 @@ interface Props {
   comments: getCommentRes[];
   isCommenting?: boolean;
   postId?: string;
+  commentErrorText?: string;
 }
 const CommentsView = ({
   onClose,
@@ -40,6 +41,7 @@ const CommentsView = ({
   comments,
   isCommenting,
   postId,
+  commentErrorText,
 }: Props) => {
   const { colors, spacing, fonts } = useTheme();
   const styles = useStyles(colors, spacing, fonts);
@@ -51,14 +53,36 @@ const CommentsView = ({
 
   const onMenuPress = (commentItem: getCommentRes) => {
     if (!postId) return;
-    Alert.alert('Actions', undefined, [
+    Alert.alert('Actions', 'Select a reason', [
       {
-        text: 'Report Comment',
+        text: 'Report: Harassment',
         onPress: async () => {
           await reportComment({
             postId,
             commentId: commentItem.id,
             reason: 'Harassment',
+          }).unwrap();
+          showSuccessMsg("Thanks, we’ll review this.");
+        },
+      },
+      {
+        text: 'Report: Spam',
+        onPress: async () => {
+          await reportComment({
+            postId,
+            commentId: commentItem.id,
+            reason: 'Spam',
+          }).unwrap();
+          showSuccessMsg("Thanks, we’ll review this.");
+        },
+      },
+      {
+        text: 'Report: Other',
+        onPress: async () => {
+          await reportComment({
+            postId,
+            commentId: commentItem.id,
+            reason: 'Other',
           }).unwrap();
           showSuccessMsg("Thanks, we’ll review this.");
         },
@@ -197,6 +221,15 @@ const CommentsView = ({
           </TouchableOpacity>
         </View>
       </View>
+      {!!commentErrorText && (
+        <AppText
+          size={12}
+          color={colors.danger}
+          style={{ marginHorizontal: 50, marginTop: -24, marginBottom: 10 }}
+        >
+          {commentErrorText}
+        </AppText>
+      )}
     </KeyboardAvoidingView>
   );
 };

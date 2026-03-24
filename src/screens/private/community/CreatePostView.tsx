@@ -20,11 +20,13 @@ import ImagePicker, { ImageOrVideo } from 'react-native-image-crop-picker';
 interface CreatePostViewProps {
   formData: CreatePostArg;
   setFormData: React.Dispatch<React.SetStateAction<CreatePostArg>>;
+  errorText?: string;
 }
 
 const CreatePostView: React.FC<CreatePostViewProps> = ({
   formData,
   setFormData,
+  errorText,
 }) => {
   const { colors, fonts, spacing } = useTheme();
   const styles = useStyles(colors, fonts, spacing);
@@ -99,6 +101,11 @@ const CreatePostView: React.FC<CreatePostViewProps> = ({
             setInputHeight(Math.max(120, e.nativeEvent.contentSize.height))
           }
         />
+        {!!errorText && (
+          <AppText size={12} color={colors.danger} style={{ marginBottom: 10 }}>
+            {errorText}
+          </AppText>
+        )}
 
         {/* Image preview */}
         {formData?.images?.length > 0 && (

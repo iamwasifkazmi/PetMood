@@ -10,14 +10,14 @@ export const privacyApiSlice = createApi({
   endpoints: build => ({
     getAiConsent: build.query<GetAiConsentRes, void>({
       query: () => ({
-        url: 'services/privacy/ai-consent',
+        url: 'privacy/ai-consent',
         method: 'get',
       }),
       providesTags: ['AiConsent'],
     }),
     setAiConsent: build.mutation<SetAiConsentRes, SetAiConsentArg>({
       query: body => ({
-        url: 'services/privacy/ai-consent',
+        url: 'privacy/ai-consent',
         method: 'post',
         data: body,
       }),
