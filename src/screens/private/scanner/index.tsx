@@ -264,7 +264,9 @@ const Scanner = () => {
           setConsentVisible(false);
           setPendingRetry(null);
           setRequiredProvider(null);
-          showErrMsg('You can enable AI analysis in Settings anytime.');
+          showErrMsg(
+            'You can enable AI analysis anytime from the menu: AI consent.',
+          );
         }}
         onSubmit={async providers => {
           try {

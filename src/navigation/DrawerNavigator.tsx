@@ -22,6 +22,7 @@ import { RootState, store } from '../features/store';
 import { useDeleteUserAccountMutation } from '../features/user/userApiSlice';
 import { clearUser } from '../features/user/userSlice';
 import PrivacyPolicy from '../screens/private/privacyPolicy';
+import PrivacyAiConsentScreen from '../screens/private/privacyAiConsent';
 import Settings from '../screens/private/settings';
 import Support from '../screens/private/support';
 import Subscription from '../screens/private/subscription';
@@ -139,6 +140,17 @@ const CustomDrawerContent = (props: any) => {
         <TouchableOpacity
           style={styles.menuItem}
           onPress={() => {
+            props.navigation.navigate('AiConsent');
+            props.navigation.dispatch(DrawerActions.closeDrawer());
+          }}
+        >
+          <Icon name="lock-outline" size={22} color="#999" />
+          <Text style={styles.menuText}>AI consent</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => {
             props.navigation.navigate('Subscription');
             props.navigation.dispatch(DrawerActions.closeDrawer());
           }}
@@ -212,6 +224,14 @@ const DrawerNavigator = () => {
         options={{
           drawerLabel: 'Settings',
           title: 'Settings',
+        }}
+      />
+      <Drawer.Screen
+        name="AiConsent"
+        component={PrivacyAiConsentScreen}
+        options={{
+          drawerLabel: 'AI consent',
+          title: 'AI analysis consent',
         }}
       />
       <Drawer.Screen

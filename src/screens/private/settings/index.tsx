@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, StyleSheet, Switch, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, StyleSheet, TouchableOpacity, View } from 'react-native';
 import ImagePicker from 'react-native-image-crop-picker';
 import { useNavigation } from '@react-navigation/native';
 import icons from '../../../assets/icons/icons';
@@ -21,11 +21,6 @@ import { RootState } from '../../../features/store';
 import { useUpdateUserProfileMutation } from '../../../features/user/userApiSlice';
 import { useChangePasswordMutation } from '../../../features/auth/authApiSlice';
 import { showErrMsg } from '../../../utils/flashMessage';
-import {
-  useGetAiConsentQuery,
-  useSetAiConsentMutation,
-} from '../../../features/privacy/privacyApiSlice';
-import { AiProviderKey } from '../../../features/privacy/types';
 
 const Settings = () => {
   const navigation = useNavigation();
@@ -57,59 +52,11 @@ const Settings = () => {
 
   const [updateProfile, updateProfileProps] = useUpdateUserProfileMutation();
   const [changePassword, changePasswordProps] = useChangePasswordMutation();
-  const { data: aiConsentData, isFetching: aiConsentLoading } = useGetAiConsentQuery();
-  const [setAiConsent, setAiConsentState] = useSetAiConsentMutation();
-  const [allowAiAnalysis, setAllowAiAnalysis] = useState(false);
-  const [aiProviders, setAiProviders] = useState<Record<AiProviderKey, boolean>>({
-    nyckel: false,
-    assemblyai: false,
-  });
 
   const bottomSheetRef = useRef<GlobalBottomSheetRef>(null);
   console.log('user', user);
   const isPersonalTab = activeTab === 'personal_details';
   const isSecurityTab = activeTab === 'security';
-
-  React.useEffect(() => {
-    const consent = aiConsentData?.consent;
-    if (!consent) return;
-    setAllowAiAnalysis(!!consent.granted);
-    setAiProviders({
-      nyckel: consent.providers?.includes('nyckel') ?? false,
-      assemblyai: consent.providers?.includes('assemblyai') ?? false,
-    });
-  }, [aiConsentData]);
-
-  const saveAiConsent = async (granted: boolean, providers: AiProviderKey[]) => {
-    await setAiConsent({ granted, providers }).unwrap();
-  };
-
-  const onToggleAllowAi = async (value: boolean) => {
-    const nextProviders: AiProviderKey[] = value ? ['nyckel', 'assemblyai'] : [];
-    setAllowAiAnalysis(value);
-    setAiProviders({
-      nyckel: value,
-      assemblyai: value,
-    });
-    try {
-      await saveAiConsent(value, nextProviders);
-    } catch {
-      showErrMsg('Unable to update AI consent. Please try again.');
-    }
-  };
-
-  const onToggleProvider = async (provider: AiProviderKey, value: boolean) => {
-    const next = { ...aiProviders, [provider]: value };
-    const providers = (Object.keys(next) as AiProviderKey[]).filter(k => next[k]);
-    const granted = providers.length > 0;
-    setAiProviders(next);
-    setAllowAiAnalysis(granted);
-    try {
-      await saveAiConsent(granted, providers);
-    } catch {
-      showErrMsg('Unable to update AI provider consent. Please try again.');
-    }
-  };
 
   const openGallery = async () => {
     const hasPermission = await requestGalleryPermission();
@@ -270,6 +217,15 @@ const Settings = () => {
           </TouchableOpacity>
         </View>
 
+        <TouchableOpacity
+          style={{ marginTop: 16, marginBottom: 8 }}
+          onPress={() => (navigation as any).navigate('AiConsent')}
+        >
+          <AppText size={14} color={colors.primary} fontWeight="medium">
+            AI analysis consent (grant / revoke)
+          </AppText>
+        </TouchableOpacity>
+
         {/* Personal Details */}
         {isPersonalTab && (
           <>
@@ -355,45 +311,6 @@ const Settings = () => {
             onPress={handleSaveChanges}
           />
         </View>
-
-        {/* Privacy > AI Analysis Consent */}
-        <View style={styles.privacyCard}>
-          <AppText fontWeight="bold" style={{ marginBottom: 10 }}>
-            Privacy - AI Analysis Consent
-          </AppText>
-          <AppText size={12} color={colors.caption} style={{ marginBottom: 12 }}>
-            We only send user-submitted image/audio bytes to selected AI providers for pet
-            emotion detection.
-          </AppText>
-
-          <View style={styles.rowBetween}>
-            <AppText fontWeight="semiBold">Allow AI analysis</AppText>
-            {aiConsentLoading || setAiConsentState.isLoading ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : (
-              <Switch value={allowAiAnalysis} onValueChange={onToggleAllowAi} />
-            )}
-          </View>
-
-          {allowAiAnalysis && (
-            <>
-              <View style={styles.rowBetween}>
-                <AppText>Nyckel (images)</AppText>
-                <Switch
-                  value={aiProviders.nyckel}
-                  onValueChange={value => onToggleProvider('nyckel', value)}
-                />
-              </View>
-              <View style={styles.rowBetween}>
-                <AppText>AssemblyAI (audio)</AppText>
-                <Switch
-                  value={aiProviders.assemblyai}
-                  onValueChange={value => onToggleProvider('assemblyai', value)}
-                />
-              </View>
-            </>
-          )}
-        </View>
       </View>
 
       {/* Bottom Sheet */}
@@ -445,19 +362,5 @@ const useStyles = (colors: Theme['colors'], spacing: Theme['spacing']) =>
       height: 84,
       overflow: 'hidden',
       borderRadius: 50,
-    },
-    privacyCard: {
-      marginTop: 16,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 12,
-      padding: 12,
-      backgroundColor: colors.background,
-    },
-    rowBetween: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 8,
     },
   });
