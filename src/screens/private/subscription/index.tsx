@@ -23,6 +23,11 @@ import { subscriptionService } from '../../../services/subscriptionService';
 import { store } from '../../../features/store';
 import { setError } from '../../../features/subscription/subscriptionSlice';
 import { DrawerActions } from '@react-navigation/native';
+import {
+  PRIVACY_POLICY_WEB_URL,
+  TERMS_AND_CONDITIONS_URL,
+  TERMS_OF_USE_EULA_URL,
+} from '../../../common/legalUrls';
 
 const Subscription = () => {
   const navigation = useNavigation();
@@ -373,10 +378,11 @@ const Subscription = () => {
                   <AppText fontWeight="bold" size={18}>
                     {plan.period === 'monthly' ? 'Monthly' : 'Annual'}
                   </AppText>
-                  <AppText color={colors.caption} size={14} style={{ marginTop: 4 }}>
-                    {plan.description}
+                  <AppText color={colors.caption} size={13} style={{ marginTop: 2 }}>
+                    Subscription: {plan.description}
                   </AppText>
-                  <AppText color={colors.caption} size={12} style={{ marginTop: 8 }}>
+                  <AppText color={colors.caption} size={12} style={{ marginTop: 6 }}>
+                    Length: {plan.durationLabel} ·{' '}
                     {plan.period === 'monthly'
                       ? 'Billed monthly, auto-renews'
                       : 'Billed annually, auto-renews'}
@@ -443,10 +449,11 @@ const Subscription = () => {
                   <AppText fontWeight="bold" size={18}>
                     {plan.period === 'monthly' ? 'Monthly' : 'Annual'}
                   </AppText>
-                  <AppText color={colors.caption} size={14} style={{ marginTop: 4 }}>
-                    {plan.description}
+                  <AppText color={colors.caption} size={13} style={{ marginTop: 2 }}>
+                    Subscription: {plan.description}
                   </AppText>
-                  <AppText color={colors.caption} size={12} style={{ marginTop: 8 }}>
+                  <AppText color={colors.caption} size={12} style={{ marginTop: 6 }}>
+                    Length: {plan.durationLabel} ·{' '}
                     {plan.period === 'monthly'
                       ? 'Billed monthly, auto-renews'
                       : 'Billed annually, auto-renews'}
@@ -493,31 +500,36 @@ const Subscription = () => {
           style={{ marginTop: 32, marginBottom: 24 }}
         />
 
-        {/* Required Links - Terms of Use and Privacy Policy */}
-        <View style={styles.linksContainer}>
+        {/* Required Links - Privacy, EULA, Terms & Conditions (Apple 3.1.2) */}
+        <View style={[styles.linksContainer, { flexWrap: 'wrap', justifyContent: 'center' }]}>
           <TouchableOpacity
-            onPress={() => {
-              // Navigate to Privacy Policy - it's in the drawer navigator
-              (navigation as any).navigate('PrivacyPolicy');
-            }}
+            onPress={() => Linking.openURL(PRIVACY_POLICY_WEB_URL)}
             style={styles.linkButton}
           >
             <AppText size={14} color={colors.primary} fontWeight="medium">
               Privacy Policy
             </AppText>
           </TouchableOpacity>
-          <AppText size={14} color={colors.caption} style={{ marginHorizontal: 8 }}>
+          <AppText size={14} color={colors.caption} style={{ marginHorizontal: 6 }}>
             •
           </AppText>
           <TouchableOpacity
-            onPress={() => {
-              // Link to Terms of Use - using Apple's standard EULA
-              Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/');
-            }}
+            onPress={() => Linking.openURL(TERMS_OF_USE_EULA_URL)}
             style={styles.linkButton}
           >
             <AppText size={14} color={colors.primary} fontWeight="medium">
-              Terms of Use
+              Terms of Use (EULA)
+            </AppText>
+          </TouchableOpacity>
+          <AppText size={14} color={colors.caption} style={{ marginHorizontal: 6 }}>
+            •
+          </AppText>
+          <TouchableOpacity
+            onPress={() => Linking.openURL(TERMS_AND_CONDITIONS_URL)}
+            style={styles.linkButton}
+          >
+            <AppText size={14} color={colors.primary} fontWeight="medium">
+              Terms &amp; Conditions
             </AppText>
           </TouchableOpacity>
         </View>

@@ -1,15 +1,24 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Theme } from '../../../common/theme';
 import AppText from '../../../components/Text/AppText';
 import Header from '../../../components/header/Header';
 import { useTheme } from '../../../hooks/useTheme';
 import CardView from '../../../components/cards/CardView';
+import {
+  PRIVACY_POLICY_WEB_URL,
+  TERMS_AND_CONDITIONS_URL,
+  TERMS_OF_USE_EULA_URL,
+} from '../../../common/legalUrls';
 
 const PrivacyPolicy = () => {
   const { colors, spacing } = useTheme();
   const styles = useStyles(colors, spacing);
+
+  const openUrl = (url: string) => {
+    Linking.openURL(url);
+  };
 
   return (
     <SafeAreaView
@@ -17,18 +26,30 @@ const PrivacyPolicy = () => {
       style={{ flex: 1, backgroundColor: colors.background }}
     >
       <Header />
-      <View style={{ padding: spacing.padding, flex: 1 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          padding: spacing.padding,
+          paddingBottom: spacing.padding * 2,
+        }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator
+      >
         <AppText
           variant="heading"
           fontWeight="semiBold"
-          style={{ marginBottom: 24 }}
+          style={{ marginBottom: 8 }}
         >
           Privacy Policy
         </AppText>
 
+        <AppText color={colors.caption} style={{ marginBottom: 16, lineHeight: 20 }}>
+          Below is a short summary. For the complete Privacy Policy, Terms of Use (EULA),
+          and Terms &amp; Conditions, use the links at the bottom of this screen.
+        </AppText>
+
         <CardView>
-          {/* Section 1 */}
-          <ScrollView>
+          <View>
             <AppText
               variant="subheading"
               fontWeight="semiBold"
@@ -83,7 +104,6 @@ const PrivacyPolicy = () => {
               </AppText>
             </View>
 
-            {/* Section 2 */}
             <AppText
               variant="subheading"
               fontWeight="semiBold"
@@ -111,9 +131,56 @@ const PrivacyPolicy = () => {
                 Maintain your scan history and pet records.
               </AppText>
             </View>
-          </ScrollView>
+          </View>
         </CardView>
-      </View>
+
+        <AppText
+          variant="subheading"
+          fontWeight="semiBold"
+          style={{ marginTop: 24, marginBottom: 8 }}
+        >
+          Full legal documents
+        </AppText>
+        <AppText color={colors.caption} style={{ marginBottom: 16, lineHeight: 20 }}>
+          Tap a link to open the full text in your browser (petmood.care).
+        </AppText>
+
+        <View style={styles.legalLinks}>
+          <TouchableOpacity
+            onPress={() => openUrl(PRIVACY_POLICY_WEB_URL)}
+            style={styles.legalLinkRow}
+          >
+            <AppText color={colors.primary} fontWeight="semiBold">
+              Full Privacy Policy
+            </AppText>
+            <AppText size={11} color={colors.caption} style={{ marginTop: 4 }}>
+              {PRIVACY_POLICY_WEB_URL}
+            </AppText>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => openUrl(TERMS_OF_USE_EULA_URL)}
+            style={styles.legalLinkRow}
+          >
+            <AppText color={colors.primary} fontWeight="semiBold">
+              Terms of Use (EULA)
+            </AppText>
+            <AppText size={11} color={colors.caption} style={{ marginTop: 4 }}>
+              {TERMS_OF_USE_EULA_URL}
+            </AppText>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => openUrl(TERMS_AND_CONDITIONS_URL)}
+            style={styles.legalLinkRow}
+          >
+            <AppText color={colors.primary} fontWeight="semiBold">
+              Terms &amp; Conditions
+            </AppText>
+            <AppText size={11} color={colors.caption} style={{ marginTop: 4 }}>
+              {TERMS_AND_CONDITIONS_URL}
+            </AppText>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -122,6 +189,17 @@ export default PrivacyPolicy;
 
 const useStyles = (colors: Theme['colors'], spacing: Theme['spacing']) =>
   StyleSheet.create({
+    legalLinks: {
+      gap: 12,
+    },
+    legalLinkRow: {
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+    },
     sectionTitle: {
       marginBottom: 8,
       color: colors.text,

@@ -25,6 +25,8 @@ export interface SubscriptionPlan {
   id: string;
   type: SubscriptionPlanType;
   period: SubscriptionPeriod;
+  /** Apple 3.1.2: show subscription length clearly (e.g. 1 month, 1 year) */
+  durationLabel: string;
   price: number;
   priceFormatted: string;
   productId: string;
@@ -36,6 +38,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     id: 'premium_monthly',
     type: 'premium',
     period: 'monthly',
+    durationLabel: '1 month',
     price: 7.99,
     priceFormatted: '7.99€',
     productId: SUBSCRIPTION_PRODUCT_IDS.PREMIUM_MONTHLY,
@@ -45,6 +48,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     id: 'premium_annual',
     type: 'premium',
     period: 'annual',
+    durationLabel: '1 year',
     price: 79.99,
     priceFormatted: '79.99€',
     productId: SUBSCRIPTION_PRODUCT_IDS.PREMIUM_ANNUAL,
@@ -54,6 +58,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     id: 'family_monthly',
     type: 'family',
     period: 'monthly',
+    durationLabel: '1 month',
     price: 9.99,
     priceFormatted: '9.99€',
     productId: SUBSCRIPTION_PRODUCT_IDS.FAMILY_MONTHLY,
@@ -63,6 +68,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     id: 'family_annual',
     type: 'family',
     period: 'annual',
+    durationLabel: '1 year',
     price: 99.99,
     priceFormatted: '99.99€',
     productId: SUBSCRIPTION_PRODUCT_IDS.FAMILY_ANNUAL,

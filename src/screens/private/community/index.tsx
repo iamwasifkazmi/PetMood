@@ -1,9 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   ImageBackground,
+  Linking,
+  Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
@@ -25,7 +29,7 @@ import {
 import { store, useAppDispatch } from '../../../features/store';
 import { hideTabBar, showTabBar } from '../../../features/tabBar/tabBarSlice';
 import { useTheme } from '../../../hooks/useTheme';
-import { CommunityProps } from '../../../navigation/types';
+import { CommunityProps, RouteName } from '../../../navigation/types';
 import CommentsView from './CommentsView';
 import CreatePostView from './CreatePostView';
 import {
@@ -42,11 +46,18 @@ import {
 } from '../../../features/cummunity/cummunityApiSlice';
 import { CreatePostArg, CummunityRes } from '../../../features/cummunity/types';
 import LikesListView from './LikesListView';
-import { Alert } from 'react-native';
 import { showErrMsg, showSuccessMsg } from '../../../utils/flashMessage';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../../features/store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  PRIVACY_POLICY_WEB_URL,
+  TERMS_AND_CONDITIONS_URL,
+  TERMS_OF_USE_EULA_URL,
+} from '../../../common/legalUrls';
+
+const UGC_TERMS_STORAGE_KEY = 'petmood_ugc_terms_accepted_v1';
 
 const Community = ({ navigation }: CommunityProps) => {
   const { colors, fonts, spacing } = useTheme();
@@ -75,6 +86,8 @@ const Community = ({ navigation }: CommunityProps) => {
   const [hiddenPostIds, setHiddenPostIds] = useState<Record<string, true>>({});
   const [createPostInlineError, setCreatePostInlineError] = useState('');
   const [createCommentInlineError, setCreateCommentInlineError] = useState('');
+  /** null = loading from storage; false = show gate; true = feed allowed */
+  const [ugcTermsAccepted, setUgcTermsAccepted] = useState<boolean | null>(null);
   const [createCommunityPost, { isLoading: creatingPost }] =
     useCreateCommunityPostMutation();
   const dispatch = useAppDispatch();
@@ -85,19 +98,25 @@ const Community = ({ navigation }: CommunityProps) => {
     isLoading: postsLoading,
     refetch, // ✅ <-- get refetch function
     isFetching, // ✅ <-- used to control refresh spinner
-  } = useGetCummunityPostsQuery({
-    limit: 20,
-    offset: 0,
-  });
+  } = useGetCummunityPostsQuery(
+    {
+      limit: 20,
+      offset: 0,
+    },
+    { skip: ugcTermsAccepted !== true },
+  );
   const {
     data: myPost,
     isLoading: myPostsLoading,
     refetch: myPostsRefetch, // ✅ <-- get refetch function
     isFetching: myPostsIsFetching, // ✅ <-- used to control refresh spinner
-  } = useGetMyCommunityPostsQuery({
-    limit: 20,
-    offset: 0,
-  });
+  } = useGetMyCommunityPostsQuery(
+    {
+      limit: 20,
+      offset: 0,
+    },
+    { skip: ugcTermsAccepted !== true },
+  );
   const [createComment, { isLoading: createCommentLoading }] =
     useCreateCommunityCommentMutation();
   const { data: comments, isLoading: commentsLoading } =
@@ -108,7 +127,7 @@ const Community = ({ navigation }: CommunityProps) => {
         postId: postId ?? '',
       },
       {
-        skip: !showComments,
+        skip: !showComments || ugcTermsAccepted !== true,
       },
     );
 
@@ -119,7 +138,7 @@ const Community = ({ navigation }: CommunityProps) => {
       offset: 0,
     },
     {
-      skip: !showLikes || !likesPostId,
+      skip: !showLikes || !likesPostId || ugcTermsAccepted !== true,
     },
   );
   const [deletePost, { isLoading: isDeleting }] =
@@ -142,6 +161,12 @@ const Community = ({ navigation }: CommunityProps) => {
         // ignore
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem(UGC_TERMS_STORAGE_KEY).then(v => {
+      setUgcTermsAccepted(v === 'true');
+    });
   }, []);
 
   const persistHidden = async (next: Record<string, true>) => {
@@ -233,6 +258,10 @@ const Community = ({ navigation }: CommunityProps) => {
 
   const promptReportPost = () => {
     if (!menuPost?.id) return;
+    if (menuPost.authorId === user?.uid) {
+      showErrMsg("You can’t report your own post.");
+      return;
+    }
     Alert.alert('Report Post', 'Select a reason', [
       {
         text: 'Harassment',
@@ -336,6 +365,103 @@ const Community = ({ navigation }: CommunityProps) => {
       store.dispatch(showTabBar());
     };
   }, [showComments, dispatch]);
+
+  const acceptUgcTerms = async () => {
+    try {
+      await AsyncStorage.setItem(UGC_TERMS_STORAGE_KEY, 'true');
+    } catch {
+      // ignore
+    }
+    setUgcTermsAccepted(true);
+  };
+
+  const openPrivacyPolicy = () => {
+    const web = PRIVACY_POLICY_WEB_URL?.trim();
+    if (web) {
+      Linking.openURL(web);
+      return;
+    }
+    const drawerNav = navigation.getParent?.()?.getParent?.();
+    if (drawerNav) {
+      (drawerNav as any).navigate('PrivacyPolicy');
+    } else {
+      (navigation as any).navigate('PrivacyPolicy');
+    }
+  };
+
+  const openTermsOfUse = () => {
+    Linking.openURL(TERMS_OF_USE_EULA_URL);
+  };
+
+  const openTermsAndConditions = () => {
+    Linking.openURL(TERMS_AND_CONDITIONS_URL);
+  };
+
+  const handleDeclineUgcTerms = () => {
+    navigation.navigate(RouteName.Home as never);
+  };
+
+  if (ugcTermsAccepted === null) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: colors.background,
+        }}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (ugcTermsAccepted === false) {
+    return (
+      <Modal visible animationType="slide" presentationStyle="fullScreen">
+        <SafeAreaView
+          style={{ flex: 1, backgroundColor: colors.background }}
+          edges={['top', 'bottom']}
+        >
+          <ScrollView
+            contentContainerStyle={{ padding: 24, paddingBottom: 48 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            <AppText variant="subheading" fontWeight="bold" style={{ marginBottom: 12 }}>
+              Community guidelines & terms
+            </AppText>
+            <AppText color={colors.caption} style={{ marginBottom: 16, lineHeight: 22 }}>
+              PetMood Community includes user-generated content. Before you continue, please
+              review our Privacy Policy and Terms of Use (EULA). By tapping &quot;I agree and
+              continue&quot;, you agree to these terms and our community rules.
+            </AppText>
+            <TouchableOpacity onPress={openPrivacyPolicy} style={{ marginBottom: 12 }}>
+              <AppText color={colors.primary} fontWeight="medium">
+                Privacy Policy
+              </AppText>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={openTermsOfUse} style={{ marginBottom: 12 }}>
+              <AppText color={colors.primary} fontWeight="medium">
+                Terms of Use (EULA)
+              </AppText>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={openTermsAndConditions} style={{ marginBottom: 24 }}>
+              <AppText color={colors.primary} fontWeight="medium">
+                Terms &amp; Conditions
+              </AppText>
+            </TouchableOpacity>
+            <PrimaryButton title="I agree and continue" onPress={acceptUgcTerms} />
+            <PrimaryButton
+              title="Not now"
+              type="outlined"
+              style={{ marginTop: 12 }}
+              onPress={handleDeclineUgcTerms}
+            />
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+    );
+  }
 
   return (
     <View style={{ flex: 1 }}>
@@ -531,12 +657,14 @@ const Community = ({ navigation }: CommunityProps) => {
               />
             ) : null}
 
-            <PrimaryButton
-              style={{ marginTop: 12 }}
-              type="outlined"
-              title="Report Post"
-              onPress={promptReportPost}
-            />
+            {menuPost?.authorId !== user?.uid ? (
+              <PrimaryButton
+                style={{ marginTop: 12 }}
+                type="outlined"
+                title="Report Post"
+                onPress={promptReportPost}
+              />
+            ) : null}
 
             <PrimaryButton
               style={{ marginTop: 12 }}

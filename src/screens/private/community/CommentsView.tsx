@@ -53,6 +53,9 @@ const CommentsView = ({
 
   const onMenuPress = (commentItem: getCommentRes) => {
     if (!postId) return;
+    if (commentItem.authorId === user?.uid) {
+      return;
+    }
     Alert.alert('Actions', 'Select a reason', [
       {
         text: 'Report: Harassment',
