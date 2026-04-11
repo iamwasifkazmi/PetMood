@@ -16,7 +16,11 @@ import PrimaryButton from '../../../components/buttons/PrimaryButton';
 import Header from '../../../components/header/Header';
 import { useTheme } from '../../../hooks/useTheme';
 import { useSubscription } from '../../../hooks/useSubscription';
-import { SUBSCRIPTION_PLANS } from '../../../constants/subscription';
+import {
+  SUBSCRIPTION_PLANS,
+  SUBSCRIPTION_TRIAL_DAYS,
+  SUBSCRIPTION_TRIAL_TRIES_PER_DAY,
+} from '../../../constants/subscription';
 import { Theme } from '../../../common/theme';
 import { showErrMsg, showSuccessMsg } from '../../../utils/flashMessage';
 import { subscriptionService } from '../../../services/subscriptionService';
@@ -28,6 +32,9 @@ import {
   TERMS_AND_CONDITIONS_URL,
   TERMS_OF_USE_EULA_URL,
 } from '../../../common/legalUrls';
+
+/** Opens Apple’s subscription management (Safari / account). */
+const APPLE_SUBSCRIPTIONS_MANAGE_URL = 'https://apps.apple.com/account/subscriptions';
 
 const Subscription = () => {
   const navigation = useNavigation();
@@ -346,6 +353,35 @@ const Subscription = () => {
           </View>
         )}
 
+        {/* Single place: free trial, billing, cancel (Apple) — plan cards stay short below */}
+        {Platform.OS === 'ios' && (
+          <View style={[styles.statusCard, styles.trialInfoCard]}>
+            <AppText fontWeight="bold">Free trial &amp; billing</AppText>
+            <AppText size={11} color={colors.caption} style={{ marginTop: 10, lineHeight: 18 }}>
+              All plans include a {SUBSCRIPTION_TRIAL_DAYS}-day free trial for eligible new
+              subscribers. During the trial you can use up to {SUBSCRIPTION_TRIAL_TRIES_PER_DAY}{' '}
+              tries per day (scans). After the trial, the price shown on each plan
+              applies each billing period until you cancel.{'\n\n'}
+              • Cancel at least 24 hours before the trial ends if you don’t want to be
+              charged; you can use premium features until the trial ends.{'\n'}
+              • If you don’t cancel before the trial ends, your subscription renews
+              automatically at the plan price until you cancel.{'\n'}
+              • The introductory trial is available only once per eligible subscriber, per
+              Apple’s rules.{'\n'}
+              • To cancel: Settings → your name → Subscriptions → PetMood → Cancel
+              Subscription.
+            </AppText>
+            <TouchableOpacity
+              onPress={() => Linking.openURL(APPLE_SUBSCRIPTIONS_MANAGE_URL)}
+              style={{ marginTop: 12 }}
+            >
+              <AppText size={13} color={colors.primary} fontWeight="semiBold">
+                Open Apple subscription management →
+              </AppText>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Premium Plans */}
         <AppText
           variant="subheading"
@@ -391,6 +427,9 @@ const Subscription = () => {
                 <View style={{ alignItems: 'flex-end' }}>
                   <AppText fontWeight="bold" size={20} color={colors.primary}>
                     {getProductPrice(plan.productId) || plan.priceFormatted}
+                  </AppText>
+                  <AppText size={10} color={colors.caption} style={{ marginTop: 4 }}>
+                    after trial
                   </AppText>
                   {plan.period === 'annual' && (
                     <AppText size={12} color={colors.caption} style={{ marginTop: 2 }}>
@@ -463,6 +502,9 @@ const Subscription = () => {
                   <AppText fontWeight="bold" size={20} color={colors.primary}>
                     {getProductPrice(plan.productId) || plan.priceFormatted}
                   </AppText>
+                  <AppText size={10} color={colors.caption} style={{ marginTop: 4 }}>
+                    after trial
+                  </AppText>
                   {plan.period === 'annual' && (
                     <AppText size={12} color={colors.caption} style={{ marginTop: 2 }}>
                       Save 17%
@@ -534,14 +576,14 @@ const Subscription = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Info Text */}
+        {/* Short footer — trial details are in the section above */}
         <AppText
-          size={12}
+          size={11}
           color={colors.caption}
-          style={{ textAlign: 'center', marginBottom: 24, marginTop: 16 }}
+          style={{ textAlign: 'center', marginBottom: 24, marginTop: 8 }}
         >
-          Subscriptions will auto-renew unless cancelled at least 24 hours before the
-          end of the current period. Manage subscriptions in your Apple ID settings.
+          Charges go to your Apple ID. See &quot;Free trial &amp; billing&quot; above for
+          details.
         </AppText>
       </ScrollView>
     </View>
@@ -629,5 +671,8 @@ const useStyles = (
     },
     linkButton: {
       paddingVertical: 4,
+    },
+    trialInfoCard: {
+      marginBottom: 8,
     },
   });

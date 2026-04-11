@@ -1,4 +1,15 @@
 /**
+ * Introductory free trial length (must match App Store Connect subscription offer).
+ * Used in-app for disclosure copy only; billing is determined by Apple.
+ */
+export const SUBSCRIPTION_TRIAL_DAYS = 7;
+
+/**
+ * In-app limit: tries (scans) per day during the free-trial period (disclosure + enforce in app if needed).
+ */
+export const SUBSCRIPTION_TRIAL_TRIES_PER_DAY = 7;
+
+/**
  * Subscription Product IDs for iOS In-App Purchases
  * These must match the product IDs configured in App Store Connect
  */
