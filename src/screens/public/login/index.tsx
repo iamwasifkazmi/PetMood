@@ -1,5 +1,13 @@
 import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Image,
+  NativeSyntheticEvent,
+  StyleSheet,
+  Text,
+  TextInputChangeEventData,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFormik } from 'formik';
@@ -63,6 +71,25 @@ const Login = ({ navigation }: LoginProps) => {
     navigation.navigate(RouteName.ResetPassword);
   };
 
+  /** iOS/Android password autofill often fills the field without firing onChangeText; onChange usually still runs. */
+  const syncEmailFromNativeChange = (
+    e: NativeSyntheticEvent<TextInputChangeEventData>,
+  ) => {
+    const text = e.nativeEvent.text;
+    if (text !== undefined && text !== formik.values.email) {
+      formik.setFieldValue('email', text, false);
+    }
+  };
+
+  const syncPasswordFromNativeChange = (
+    e: NativeSyntheticEvent<TextInputChangeEventData>,
+  ) => {
+    const text = e.nativeEvent.text;
+    if (text !== undefined && text !== formik.values.password) {
+      formik.setFieldValue('password', text, false);
+    }
+  };
+
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.primary }}
@@ -85,7 +112,12 @@ const Login = ({ navigation }: LoginProps) => {
               keyboardType="email-address"
               value={formik.values.email}
               onChangeText={formik.handleChange('email')}
+              onChange={syncEmailFromNativeChange}
               autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="username"
+              autoComplete="email"
+              importantForAutofill="yes"
             />
 
             <PrimaryInput
@@ -95,6 +127,10 @@ const Login = ({ navigation }: LoginProps) => {
               iconColor={colors.primary}
               value={formik.values.password}
               onChangeText={formik.handleChange('password')}
+              onChange={syncPasswordFromNativeChange}
+              textContentType="password"
+              autoComplete="password"
+              importantForAutofill="yes"
             />
           </View>
 

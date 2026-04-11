@@ -108,8 +108,14 @@ const PrimaryInput = ({
       <TextInput
         placeholderTextColor={colors.placeholder}
         {...props}
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
+        onFocus={e => {
+          setIsFocused(true);
+          props.onFocus?.(e);
+        }}
+        onBlur={e => {
+          setIsFocused(false);
+          props.onBlur?.(e);
+        }}
         secureTextEntry={isSecure}
         style={[styles.input, props.style]}
       />
