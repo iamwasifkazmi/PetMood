@@ -18,6 +18,16 @@ import { setSubscription, setError, setLoading } from '../features/subscription/
 import { subscriptionApiSlice } from '../features/subscription/subscriptionApiSlice';
 import { SubscriptionStatus } from '../features/subscription/types';
 
+/** react-native-iap v14+ requires explicit subscription shape; flat `{ sku }` fails with "Missing purchase request configuration". */
+function requestSubscriptionPurchaseIOS(sku: string) {
+  return requestPurchase({
+    type: 'subs',
+    request: {
+      apple: { sku },
+    },
+  });
+}
+
 class SubscriptionService {
   private purchaseUpdateSubscription: any = null;
   private purchaseErrorSubscription: any = null;
@@ -195,7 +205,7 @@ class SubscriptionService {
   async getAvailableProducts(): Promise<Product[]> {
     try {
       const productIds = getAllProductIds();
-      const products = await fetchProducts({ skus: productIds });
+      const products = await fetchProducts({ skus: productIds, type: 'subs' });
       // Handle different return types
       if (!products) return [];
       return products as Product[];
@@ -231,7 +241,7 @@ class SubscriptionService {
       console.log('Fetching products before purchase...', productIds);
       
       try {
-        const fetchedProducts = await fetchProducts({ skus: productIds });
+        const fetchedProducts = await fetchProducts({ skus: productIds, type: 'subs' });
         const availableProducts = (fetchedProducts || []) as any[];
         console.log('Available products fetched:', availableProducts.length);
         
@@ -268,9 +278,7 @@ class SubscriptionService {
       // Request purchase - iOS will handle everything
       try {
         console.log('Calling requestPurchase with productId:', productId);
-        const result = await requestPurchase({ 
-          sku: productId,
-        } as any);
+        const result = await requestSubscriptionPurchaseIOS(productId);
         console.log('Purchase request sent successfully, result:', result);
         // The purchase will be handled by the purchaseUpdatedListener
         // Don't set loading to false here - let the listener handle it
@@ -319,7 +327,7 @@ class SubscriptionService {
           if (reinitialized) {
             // Retry purchase once
             try {
-              await requestPurchase({ sku: productId } as any);
+              await requestSubscriptionPurchaseIOS(productId);
               return;
             } catch (retryError) {
               console.error('Retry purchase failed:', retryError);
