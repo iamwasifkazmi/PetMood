@@ -7,6 +7,7 @@ import {
   requestPurchase,
   getAvailablePurchases,
   Purchase,
+  PurchaseIOS,
   Product,
   PurchaseError,
 } from 'react-native-iap';
@@ -125,6 +126,10 @@ class SubscriptionService {
       const productId = (purchase as any).productId || (purchase as any).productIdentifier || '';
       const transactionId = purchase.transactionId || '';
       const originalTransactionId = (purchase as any).originalTransactionIdentifierIOS || (purchase as any).originalTransactionIdentifier || '';
+      const signedTransactionJws =
+        Platform.OS === 'ios'
+          ? (purchase as PurchaseIOS).purchaseToken ?? undefined
+          : undefined;
 
       if (!productId || !transactionId) {
         throw new Error('Missing purchase information');
@@ -134,14 +139,16 @@ class SubscriptionService {
         product_id: productId,
         transaction_id: transactionId,
         original_transaction_id: originalTransactionId,
+        has_signed_jws: Boolean(signedTransactionJws),
       });
 
-      // Verify receipt with backend using transaction_id
+      // Verify purchase with backend (transaction ids + optional StoreKit 2 JWS)
       const verifyReceipt = store.dispatch(
         subscriptionApiSlice.endpoints.verifyReceipt.initiate({
           product_id: productId,
           transaction_id: transactionId,
           original_transaction_id: originalTransactionId || undefined,
+          ...(signedTransactionJws ? { signed_transaction_jws: signedTransactionJws } : {}),
         }),
       );
 

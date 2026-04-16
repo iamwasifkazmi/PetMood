@@ -1,13 +1,14 @@
 # Backend IAP Requirements for iOS Subscriptions
 
-This document outlines the requirements for implementing iOS In-App Purchase (IAP) receipt verification on the Python backend.
+This document is a **short checklist** for backend engineers. The **full contract** (payload fields, JWS vs App Store Server API, testing, webhooks) is in **[IAP_VERIFY_RECEIPT_AND_BACKEND.md](./IAP_VERIFY_RECEIPT_AND_BACKEND.md)** — read that first.
 
 ## Overview
 
-The React Native app will send iOS receipt data to the backend for verification. The backend must:
-1. Verify receipts with Apple's App Store Server API
-2. Store subscription information in the database
-3. Return subscription status to the app
+The React Native app sends **transaction identifiers** and (when available) a **StoreKit 2 signed transaction JWS** to the backend. It does **not** send the legacy base64 app receipt as the primary input for the current client. The backend must:
+
+1. Verify purchases with Apple (**App Store Server API** and/or **JWS verification** — see the guide above)
+2. Store subscription information for the authenticated user
+3. Return subscription status in the agreed JSON shape
 
 ## API Endpoints Required
 
@@ -15,15 +16,21 @@ The React Native app will send iOS receipt data to the backend for verification.
 
 **Endpoint:** `POST /api/subscriptions/verify-receipt`
 
-**Request Body:**
+**Request Body (matches `VerifyReceiptRequest` in the app):**
 ```json
 {
-  "receipt_data": "base64_encoded_receipt_string",
   "product_id": "com.petmood.premium.monthly",
   "transaction_id": "1000000123456789",
-  "original_transaction_id": "1000000123456789" // Optional, for renewals
+  "original_transaction_id": "1000000123456789",
+  "signed_transaction_jws": "eyJhbGciOiJFUzI1NiIs..."
 }
 ```
+
+- `product_id` and `transaction_id` are **required**.
+- `original_transaction_id` is **optional** but recommended for subscriptions.
+- `signed_transaction_jws` is **optional**; sent when iOS provides `purchaseToken` on the purchase object (StoreKit 2 JWS).
+
+You may optionally still accept **legacy** `receipt_data` for old clients or admin tools — the PetMood app version in this repo does not require it for the main flow.
 
 **Response (Success):**
 ```json
@@ -152,8 +159,8 @@ class AppleReceiptVerifier:
         token = jwt.encode(payload, private_key, algorithm="ES256", headers=headers)
         return token
     
-    def verify_receipt(self, receipt_data, product_id, transaction_id):
-        """Verify receipt with App Store Server API"""
+    def verify_receipt(self, product_id, transaction_id, original_transaction_id=None, signed_transaction_jws=None):
+        """Verify with App Store Server API using transaction_id (optional JWS can be verified separately)."""
         token = self.generate_jwt_token()
         
         # Get transaction info
@@ -262,10 +269,10 @@ from typing import Optional
 router = APIRouter(prefix="/api/subscriptions", tags=["subscriptions"])
 
 class VerifyReceiptRequest(BaseModel):
-    receipt_data: str
     product_id: str
     transaction_id: str
     original_transaction_id: Optional[str] = None
+    signed_transaction_jws: Optional[str] = None
 
 @router.post("/verify-receipt")
 async def verify_receipt(
@@ -274,9 +281,10 @@ async def verify_receipt(
 ):
     verifier = AppleReceiptVerifier()
     result = verifier.verify_receipt(
-        request.receipt_data,
         request.product_id,
-        request.transaction_id
+        request.transaction_id,
+        request.original_transaction_id,
+        request.signed_transaction_jws,
     )
     
     if result["success"]:

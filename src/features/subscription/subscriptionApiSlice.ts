@@ -26,8 +26,10 @@ export const subscriptionApiSlice = createApi({
     }),
 
     /**
-     * Verify iOS receipt with backend
-     * Uses transaction_id (not receipt_data) - backend uses App Store Server API
+     * Verify iOS purchase with backend after StoreKit completes a transaction.
+     * Payload: product_id, transaction_id, optional original_transaction_id,
+     * optional signed_transaction_jws (StoreKit 2 JWS from purchase.purchaseToken on iOS).
+     * See docs/IAP_VERIFY_RECEIPT_AND_BACKEND.md for the full contract.
      */
     verifyReceipt: build.mutation<
       VerifyReceiptResponse,
@@ -81,6 +83,20 @@ export const subscriptionApiSlice = createApi({
         method: 'post',
         data: {},
       }),
+      transformResponse: (response: { subscriptions?: any[] }) => {
+        if (!response.subscriptions?.length) {
+          return { subscriptions: [] };
+        }
+        return {
+          subscriptions: response.subscriptions.map(sub => ({
+            isActive: sub.is_active,
+            planType: sub.plan_type,
+            period: sub.period,
+            expiresAt: sub.expires_at,
+            productId: sub.product_id ?? null,
+          })),
+        };
+      },
       invalidatesTags: ['Subscription'],
     }),
   }),

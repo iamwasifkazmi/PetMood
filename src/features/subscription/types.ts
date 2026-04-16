@@ -26,10 +26,26 @@ export interface PurchaseReceipt {
   originalTransactionId?: string;
 }
 
+/**
+ * POST /api/subscriptions/verify-receipt
+ *
+ * The app does not send legacy base64 `receipt-data`. It sends Apple transaction
+ * identifiers plus, when available, the StoreKit 2 JWS from the purchase
+ * (`purchaseToken` on iOS in react-native-iap — same unified field name).
+ */
 export interface VerifyReceiptRequest {
+  /** App Store subscription / IAP product id (e.g. com.petmood.premium.monthly) */
   product_id: string;
+  /** Current transaction id from StoreKit (string) */
   transaction_id: string;
+  /** Subscription family id; stable across renewals (recommended when present) */
   original_transaction_id?: string;
+  /**
+   * StoreKit 2 signed transaction JWS (optional but recommended).
+   * On iOS this is taken from `purchase.purchaseToken` in react-native-iap.
+   * Backend may verify this JWS directly or rely on `transaction_id` + App Store Server API.
+   */
+  signed_transaction_jws?: string;
 }
 
 export interface VerifyReceiptResponse {

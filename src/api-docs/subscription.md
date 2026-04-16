@@ -2,6 +2,8 @@
 
 This document describes all endpoints under ` /api/subscriptions/ ` and how to test them (e.g. in Postman).
 
+**Verify receipt (payload + backend verification):** see the repo guide `docs/IAP_VERIFY_RECEIPT_AND_BACKEND.md`.
+
 Base URL examples:
 - Local dev: `http://127.0.0.1:8000/api/subscriptions/`
 - Render:   `https://pet-emotion-detection.onrender.com/api/subscriptions/`
@@ -65,7 +67,8 @@ Most endpoints require a **Firebase-authenticated user** (via `Authorization: Be
 
 **Description**
 - Used by the iOS app after completing a purchase to verify with Apple and save/update the user’s subscription in Firestore.
-- Works with Apple App Store Server API using the `transaction_id`.
+- The app sends `transaction_id` (and optional `original_transaction_id`). It may also send `signed_transaction_jws` (StoreKit 2 JWS from `purchase.purchaseToken` on iOS) when available — see `docs/IAP_VERIFY_RECEIPT_AND_BACKEND.md`.
+- The backend should verify using Apple’s **App Store Server API** and/or **JWS validation**; do not trust the client alone.
 
 **Request Body (JSON)**
 
@@ -73,9 +76,12 @@ Most endpoints require a **Firebase-authenticated user** (via `Authorization: Be
 {
   "product_id": "com.petmood.premium.monthly",
   "transaction_id": "1000001234567890",
-  "original_transaction_id": "1000001234567890"
+  "original_transaction_id": "1000001234567890",
+  "signed_transaction_jws": "eyJhbGciOiJFUzI1NiIs..."
 }
 ```
+
+`original_transaction_id` and `signed_transaction_jws` are optional.
 
 **Sample Success Response**
 
