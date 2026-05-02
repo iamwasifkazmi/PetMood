@@ -71,6 +71,8 @@ const Subscription = () => {
     subscriptionStatusResolved,
   } = useSubscription();
 
+  const hasActivePlan = Boolean(subscription?.isActive);
+
   const [cancelSubscription, { isLoading: isCancellingViaApi }] =
     useCancelSubscriptionMutation();
 
@@ -273,9 +275,32 @@ const Subscription = () => {
     );
   };
 
+  const alertMustCancelExistingFirst = useCallback(() => {
+    Alert.alert(
+      'You already have a subscription',
+      'To change plans, cancel your current subscription first (tap “Cancel subscription”). After it ends or from Apple’s subscription settings, you can choose a different plan.',
+      [{ text: 'OK' }],
+    );
+  }, []);
+
   const handlePurchase = async (productId: string) => {
     if (Platform.OS !== 'ios') {
       Alert.alert('Not Available', 'Subscriptions are only available on iOS.');
+      return;
+    }
+
+    const planMeta = SUBSCRIPTION_PLANS.find(p => p.productId === productId);
+    if (subscription?.isActive && planMeta) {
+      const isThisPlan = isActivePlanRow(
+        productId,
+        planMeta.type,
+        planMeta.period,
+        subscription,
+      );
+      if (!isThisPlan) {
+        alertMustCancelExistingFirst();
+        return;
+      }
       return;
     }
 
@@ -373,10 +398,21 @@ const Subscription = () => {
     }
     const planType = subscription.planType === 'premium' ? 'Premium' : 'Family';
     const period = subscription.period === 'monthly' ? 'Monthly' : 'Annual';
-    if (subscription.isTrial) {
-      return `${planType} · ${period} · Free trial`;
+    return `${planType} · ${period}`;
+  };
+
+  const formatDateTimeLocal = (iso: string | null | undefined) => {
+    if (!iso) {
+      return '—';
     }
-    return `${planType} · ${period} · Paid`;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) {
+      return iso;
+    }
+    return d.toLocaleString(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
   };
 
   const onRefresh = useCallback(async () => {
@@ -410,6 +446,23 @@ const Subscription = () => {
     await Linking.openURL(APPLE_SUBSCRIPTIONS_MANAGE_URL);
   };
 
+  const confirmCancelSubscription = () => {
+    Alert.alert(
+      'Cancel subscription?',
+      'We’ll open Apple’s subscription page next. Apple may ask you to finish cancellation in Settings → Subscriptions or in Safari — apps cannot cancel Apple billing directly.\n\nDo you want to continue?',
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: () => {
+            void openManageSubscription();
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <View style={{ flex: 1 }}>
       <Header />
@@ -436,7 +489,7 @@ const Subscription = () => {
 
         {Platform.OS === 'ios' && (
           <View style={[styles.statusCard, { marginBottom: 16 }]}>
-            <AppText fontWeight="bold" style={{ marginBottom: 6 }}>
+            <AppText fontWeight="bold" style={{ marginBottom: 8 }}>
               Your subscription
             </AppText>
             {!subscriptionStatusResolved && (
@@ -444,37 +497,117 @@ const Subscription = () => {
             )}
             {subscriptionStatusResolved && subscription?.isActive && (
               <>
-                <AppText color={colors.text} fontWeight="semiBold">
-                  {getCurrentPlanDisplay()}
-                </AppText>
+                <View style={styles.subscriptionTitleRow}>
+                  <AppText
+                    color={colors.text}
+                    fontWeight="semiBold"
+                    style={{ flex: 1, flexShrink: 1 }}
+                  >
+                    {getCurrentPlanDisplay()}
+                  </AppText>
+                  <View style={styles.currentStatusBadge}>
+                    <AppText size={11} color={colors.card} fontWeight="bold">
+                      Current
+                    </AppText>
+                  </View>
+                  {subscription.isTrial ? (
+                    <View style={styles.trialStatusBadge}>
+                      <AppText size={11} color={colors.card} fontWeight="bold">
+                        Trial
+                      </AppText>
+                    </View>
+                  ) : (
+                    <View style={styles.paidStatusBadge}>
+                      <AppText size={11} color={colors.card} fontWeight="bold">
+                        Paid
+                      </AppText>
+                    </View>
+                  )}
+                </View>
+
                 {subscription.isTrial && (
-                  <AppText
-                    size={12}
-                    color={colors.caption}
-                    style={{ marginTop: 6, lineHeight: 18 }}
-                  >
-                    Trial active — up to {SUBSCRIPTION_TRIAL_TRIES_PER_DAY} scans per UTC
-                    day.
-                    {subscription.trialDaysLeft != null
-                      ? ` About ${subscription.trialDaysLeft} full day(s) left in the trial window.`
-                      : ''}
-                  </AppText>
+                  <>
+                    {(subscription.trialDaysLeft != null ||
+                      subscription.trialDays != null) && (
+                      <AppText
+                        size={13}
+                        color={colors.text}
+                        style={{ marginTop: 10, lineHeight: 20 }}
+                      >
+                        {subscription.trialDaysLeft != null && (
+                          <>
+                            {subscription.trialDaysLeft === 0
+                              ? 'Last day of your trial.'
+                              : `${subscription.trialDaysLeft} day${
+                                  subscription.trialDaysLeft === 1 ? '' : 's'
+                                } left in your trial.`}
+                          </>
+                        )}
+                        {subscription.trialDays != null && (
+                          <>
+                            {subscription.trialDaysLeft != null ? ' ' : ''}
+                            Intro period: {subscription.trialDays} day
+                            {subscription.trialDays === 1 ? '' : 's'}.
+                          </>
+                        )}
+                      </AppText>
+                    )}
+                    <AppText
+                      size={12}
+                      color={colors.caption}
+                      style={{ marginTop: 8, lineHeight: 18 }}
+                    >
+                      Trial ends: {formatDateTimeLocal(subscription.expiresAt)}
+                    </AppText>
+                    <AppText
+                      size={12}
+                      color={colors.caption}
+                      style={{ marginTop: 6, lineHeight: 18 }}
+                    >
+                      During trial: up to {SUBSCRIPTION_TRIAL_TRIES_PER_DAY} scans per UTC
+                      day (server limit).
+                    </AppText>
+                  </>
                 )}
+
                 {!subscription.isTrial && (
-                  <AppText
-                    size={12}
-                    color={colors.caption}
-                    style={{ marginTop: 6 }}
-                  >
-                    Paid subscription (billed through Apple).
-                  </AppText>
+                  <>
+                    <AppText
+                      size={13}
+                      color={colors.text}
+                      style={{ marginTop: 10, lineHeight: 20 }}
+                    >
+                      Your subscription renews automatically. You won’t lose access until
+                      the end of the current period if you cancel.
+                    </AppText>
+                    {subscription.expiresAt ? (
+                      <AppText
+                        size={12}
+                        color={colors.caption}
+                        style={{ marginTop: 8, lineHeight: 18 }}
+                      >
+                        Next renewal: {formatDateTimeLocal(subscription.expiresAt)}
+                      </AppText>
+                    ) : null}
+                  </>
                 )}
-                {subscription.expiresAt && (
-                  <AppText size={12} color={colors.caption} style={{ marginTop: 8 }}>
-                    Renews / expires:{' '}
-                    {new Date(subscription.expiresAt).toLocaleString()}
-                  </AppText>
-                )}
+
+                <PrimaryButton
+                  title="Cancel subscription"
+                  type="outlined"
+                  loading={isCancellingViaApi}
+                  disabled={isCancellingViaApi}
+                  onPress={confirmCancelSubscription}
+                  style={{ marginTop: 16 }}
+                />
+                <AppText
+                  size={10}
+                  color={colors.caption}
+                  style={{ marginTop: 8, lineHeight: 15 }}
+                >
+                  Opens Apple’s subscription management. PetMood cannot cancel Apple
+                  billing for you.
+                </AppText>
               </>
             )}
             {subscriptionStatusResolved && !subscription?.isActive && (
@@ -713,23 +846,24 @@ const Subscription = () => {
             plan.period,
             subscription,
           );
+          const lockedOtherPlan = hasActivePlan && !isCurrentPlan;
 
-          return (
-            <TouchableOpacity
-              key={plan.id}
-              style={[
-                styles.planCard,
-                isCurrentPlan && styles.currentPlanCard,
-                isSelected && styles.selectedPlanCard,
-              ]}
-              onPress={() => handlePurchase(plan.productId)}
-              disabled={isPurchasing || isCurrentPlan}
-            >
+          const cardBody = (
+            <>
               <View style={styles.planHeader}>
                 <View style={{ flex: 1 }}>
-                  <AppText fontWeight="bold" size={18}>
-                    {plan.period === 'monthly' ? 'Monthly' : 'Annual'}
-                  </AppText>
+                  <View style={styles.planTitleRow}>
+                    <AppText fontWeight="bold" size={18}>
+                      {plan.period === 'monthly' ? 'Monthly' : 'Annual'}
+                    </AppText>
+                    {isCurrentPlan && (
+                      <View style={styles.planCurrentPill}>
+                        <AppText size={11} color={colors.card} fontWeight="bold">
+                          Current
+                        </AppText>
+                      </View>
+                    )}
+                  </View>
                   <AppText color={colors.caption} size={13} style={{ marginTop: 2 }}>
                     Subscription: {plan.description}
                   </AppText>
@@ -744,9 +878,11 @@ const Subscription = () => {
                   <AppText fontWeight="bold" size={20} color={colors.primary}>
                     {getDisplayPrice(plan.productId)}
                   </AppText>
-                  <AppText size={10} color={colors.caption} style={{ marginTop: 4 }}>
-                    after trial
-                  </AppText>
+                  {!hasActivePlan && (
+                    <AppText size={10} color={colors.caption} style={{ marginTop: 4 }}>
+                      after trial
+                    </AppText>
+                  )}
                   {plan.period === 'annual' && (
                     <AppText size={12} color={colors.caption} style={{ marginTop: 2 }}>
                       Save 17%
@@ -754,20 +890,46 @@ const Subscription = () => {
                   )}
                 </View>
               </View>
-              {isCurrentPlan && (
-                <View style={styles.currentBadge}>
-                  <AppText size={12} color={colors.card} fontWeight="bold">
-                    Current Plan
-                  </AppText>
-                </View>
-              )}
-              {isSelected && isPurchasing && (
+              {isSelected && isPurchasing && !lockedOtherPlan && (
                 <ActivityIndicator
                   size="small"
                   color={colors.primary}
                   style={{ marginTop: 12 }}
                 />
               )}
+            </>
+          );
+
+          if (isCurrentPlan) {
+            return (
+              <View
+                key={plan.id}
+                style={[styles.planCard, styles.currentPlanCard]}
+              >
+                {cardBody}
+              </View>
+            );
+          }
+
+          return (
+            <TouchableOpacity
+              key={plan.id}
+              style={[
+                styles.planCard,
+                isSelected && styles.selectedPlanCard,
+                lockedOtherPlan && styles.planCardDisabled,
+              ]}
+              activeOpacity={lockedOtherPlan ? 1 : 0.85}
+              onPress={() => {
+                if (lockedOtherPlan) {
+                  alertMustCancelExistingFirst();
+                  return;
+                }
+                void handlePurchase(plan.productId);
+              }}
+              disabled={isPurchasing}
+            >
+              {cardBody}
             </TouchableOpacity>
           );
         })}
@@ -793,23 +955,24 @@ const Subscription = () => {
             plan.period,
             subscription,
           );
+          const lockedOtherPlan = hasActivePlan && !isCurrentPlan;
 
-          return (
-            <TouchableOpacity
-              key={plan.id}
-              style={[
-                styles.planCard,
-                isCurrentPlan && styles.currentPlanCard,
-                isSelected && styles.selectedPlanCard,
-              ]}
-              onPress={() => handlePurchase(plan.productId)}
-              disabled={isPurchasing || isCurrentPlan}
-            >
+          const cardBody = (
+            <>
               <View style={styles.planHeader}>
                 <View style={{ flex: 1 }}>
-                  <AppText fontWeight="bold" size={18}>
-                    {plan.period === 'monthly' ? 'Monthly' : 'Annual'}
-                  </AppText>
+                  <View style={styles.planTitleRow}>
+                    <AppText fontWeight="bold" size={18}>
+                      {plan.period === 'monthly' ? 'Monthly' : 'Annual'}
+                    </AppText>
+                    {isCurrentPlan && (
+                      <View style={styles.planCurrentPill}>
+                        <AppText size={11} color={colors.card} fontWeight="bold">
+                          Current
+                        </AppText>
+                      </View>
+                    )}
+                  </View>
                   <AppText color={colors.caption} size={13} style={{ marginTop: 2 }}>
                     Subscription: {plan.description}
                   </AppText>
@@ -824,9 +987,11 @@ const Subscription = () => {
                   <AppText fontWeight="bold" size={20} color={colors.primary}>
                     {getDisplayPrice(plan.productId)}
                   </AppText>
-                  <AppText size={10} color={colors.caption} style={{ marginTop: 4 }}>
-                    after trial
-                  </AppText>
+                  {!hasActivePlan && (
+                    <AppText size={10} color={colors.caption} style={{ marginTop: 4 }}>
+                      after trial
+                    </AppText>
+                  )}
                   {plan.period === 'annual' && (
                     <AppText size={12} color={colors.caption} style={{ marginTop: 2 }}>
                       Save 17%
@@ -834,20 +999,46 @@ const Subscription = () => {
                   )}
                 </View>
               </View>
-              {isCurrentPlan && (
-                <View style={styles.currentBadge}>
-                  <AppText size={12} color={colors.card} fontWeight="bold">
-                    Current Plan
-                  </AppText>
-                </View>
-              )}
-              {isSelected && isPurchasing && (
+              {isSelected && isPurchasing && !lockedOtherPlan && (
                 <ActivityIndicator
                   size="small"
                   color={colors.primary}
                   style={{ marginTop: 12 }}
                 />
               )}
+            </>
+          );
+
+          if (isCurrentPlan) {
+            return (
+              <View
+                key={plan.id}
+                style={[styles.planCard, styles.currentPlanCard]}
+              >
+                {cardBody}
+              </View>
+            );
+          }
+
+          return (
+            <TouchableOpacity
+              key={plan.id}
+              style={[
+                styles.planCard,
+                isSelected && styles.selectedPlanCard,
+                lockedOtherPlan && styles.planCardDisabled,
+              ]}
+              activeOpacity={lockedOtherPlan ? 1 : 0.85}
+              onPress={() => {
+                if (lockedOtherPlan) {
+                  alertMustCancelExistingFirst();
+                  return;
+                }
+                void handlePurchase(plan.productId);
+              }}
+              disabled={isPurchasing}
+            >
+              {cardBody}
             </TouchableOpacity>
           );
         })}
@@ -929,6 +1120,42 @@ const useStyles = (
       borderWidth: 1,
       borderColor: colors.border,
     },
+    subscriptionTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    currentStatusBadge: {
+      backgroundColor: colors.green,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 10,
+    },
+    trialStatusBadge: {
+      backgroundColor: colors.primary,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 10,
+    },
+    paidStatusBadge: {
+      backgroundColor: '#2E7D6A',
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 10,
+    },
+    planTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    planCurrentPill: {
+      backgroundColor: colors.green,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 10,
+    },
     planCard: {
       backgroundColor: colors.card,
       padding: 20,
@@ -945,18 +1172,13 @@ const useStyles = (
       borderColor: colors.green,
       backgroundColor: colors.lightGreen,
     },
+    planCardDisabled: {
+      opacity: 0.52,
+    },
     planHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'flex-start',
-    },
-    currentBadge: {
-      backgroundColor: colors.green,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 20,
-      alignSelf: 'flex-start',
-      marginTop: 12,
     },
     loadingContainer: {
       alignItems: 'center',
