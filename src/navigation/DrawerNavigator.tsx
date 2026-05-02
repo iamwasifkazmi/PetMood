@@ -19,6 +19,7 @@ import { useSelector } from 'react-redux';
 
 // Screens
 import { RootState, store } from '../features/store';
+import { SubscriptionEntitlementSync } from '../features/subscription/SubscriptionEntitlementSync';
 import { useDeleteUserAccountMutation } from '../features/user/userApiSlice';
 import { clearUser } from '../features/user/userSlice';
 import PrivacyPolicy from '../screens/private/privacyPolicy';
@@ -199,6 +200,8 @@ const CustomDrawerContent = (props: any) => {
 
 const DrawerNavigator = () => {
   return (
+    <>
+      <SubscriptionEntitlementSync />
     <Drawer.Navigator
       screenOptions={{
         headerShown: false,
@@ -259,6 +262,7 @@ const DrawerNavigator = () => {
         }}
       />
     </Drawer.Navigator>
+    </>
   );
 };
 

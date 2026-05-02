@@ -1,11 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
-import { useSelector } from 'react-redux';
 import { subscriptionService } from '../services/subscriptionService';
 import { useAppSelector } from '../features/store';
 import {
-  useGetSubscriptionStatusQuery,
   useGetPlansQuery,
+  useGetSubscriptionStatusQuery,
 } from '../features/subscription/subscriptionApiSlice';
 import { Product } from 'react-native-iap';
 
@@ -15,18 +14,34 @@ import { Product } from 'react-native-iap';
 export const useSubscription = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
-  const subscription = useAppSelector(state => state.subscription?.subscription);
   const isLoading = useAppSelector(state => state.subscription?.isLoading);
   const error = useAppSelector(state => state.subscription?.error);
 
-  // Fetch plans from backend
-  const { data: plansData, isLoading: plansLoading } = useGetPlansQuery();
+  // Fetch plans from backend; same cache as other subscribers
+  const {
+    data: plansData,
+    isLoading: plansLoading,
+    refetch: refetchPlans,
+  } = useGetPlansQuery();
 
-  // Fetch subscription status from backend
-  const { data: subscriptionStatus, refetch: refetchStatus } =
-    useGetSubscriptionStatusQuery(undefined, {
-      skip: !isInitialized,
-    });
+  const {
+    data: statusData,
+    isLoading: statusLoading,
+    isFetching: statusFetching,
+    isSuccess: subscriptionStatusSuccess,
+    isError: subscriptionStatusError,
+    refetch: refetchSubscriptionStatus,
+  } = useGetSubscriptionStatusQuery();
+
+  /** Redux (sync component) or RTK cache — whichever has data first avoids an empty UI on this screen */
+  const subscription = useAppSelector(state => state.subscription?.subscription);
+  const effectiveSubscription =
+    subscription ?? statusData?.subscription ?? null;
+
+  const refetchStatus = useCallback(
+    () => refetchSubscriptionStatus(),
+    [refetchSubscriptionStatus],
+  );
 
   /**
    * Initialize IAP and load products
@@ -82,19 +97,49 @@ export const useSubscription = () => {
     }
   };
 
-  // Use subscription from Redux or backend
-  // Backend subscription is already converted to camelCase by transformResponse
-  const currentSubscription = subscription || subscriptionStatus?.subscription || null;
+  const refreshStoreProducts = useCallback(async () => {
+    if (Platform.OS !== 'ios') {
+      return;
+    }
+    try {
+      const available = await subscriptionService.getAvailableProducts();
+      setProducts(available);
+    } catch (e) {
+      console.error('Failed to refresh App Store products:', e);
+    }
+  }, []);
+
+  /** Refetch plans, entitlement status, and (iOS) StoreKit product list */
+  const refreshAll = useCallback(async () => {
+    await Promise.all([refetchPlans(), refetchSubscriptionStatus()]);
+    if (Platform.OS !== 'ios') {
+      return;
+    }
+    try {
+      const ok = await subscriptionService.initialize();
+      if (ok) {
+        setIsInitialized(true);
+      }
+      await refreshStoreProducts();
+    } catch (e) {
+      console.error('refreshAll IAP', e);
+    }
+  }, [refetchPlans, refetchSubscriptionStatus, refreshStoreProducts]);
 
   return {
     products,
     plans: plansData?.plans || [],
-    subscription: currentSubscription,
-    isLoading: isLoading || plansLoading,
+    subscription: effectiveSubscription,
+    isLoading: isLoading || plansLoading || statusLoading,
+    statusFetching,
+    subscriptionStatusResolved:
+      subscriptionStatusSuccess || subscriptionStatusError,
     error,
     isInitialized,
     purchaseSubscription,
     restorePurchases,
     refetchStatus,
+    refetchPlans,
+    refreshAll,
   };
 };

@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
-  Image,
+  Keyboard,
   NativeSyntheticEvent,
   StyleSheet,
   Text,
+  TextInput,
   TextInputChangeEventData,
   TouchableOpacity,
   View,
@@ -33,51 +34,100 @@ const Login = ({ navigation }: LoginProps) => {
 
   const [login, { isLoading }] = useLoginMutation();
 
+  const attemptLogin = async (
+    email: string,
+    password: string,
+    resetForm: () => void,
+  ) => {
+    try {
+      const res = await login({
+        email,
+        password,
+        returnSecureToken: true,
+      }).unwrap();
+
+      const idToken = res?.idToken;
+      if (!idToken || typeof idToken !== 'string') {
+        console.error('Login response missing idToken', res);
+        showErrMsg(
+          'Could not complete sign-in (no token from server). Please try again.',
+        );
+        return;
+      }
+
+      store.dispatch(setToken(idToken));
+      resetForm();
+      showSuccessMsg('Login successful!');
+    } catch (err: any) {
+      const alreadyShownByAxios = err?.status != null || err?.data != null;
+      if (!alreadyShownByAxios) {
+        const msg =
+          typeof err?.message === 'string' ? err.message : 'Sign in failed.';
+        showErrMsg(msg);
+      }
+      console.error('Login error', err);
+    }
+  };
+
+  const emailInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  /** iOS Keychain/AutoFill can show text before React state updates; keep last known strings for submit. */
+  const emailDraftRef = useRef('');
+  const passwordDraftRef = useRef('');
+
   const formik = useFormik({
     initialValues: {
       email: '',
       password: '',
     },
     validationSchema: loginSchema,
-    validateOnMount: true,
+    validateOnMount: false,
     onSubmit: async (values, { resetForm }) => {
-      try {
-        const res = await login({
-          email: values.email,
-          password: values.password,
-          returnSecureToken: true,
-        }).unwrap();
-        store.dispatch(setToken(res?.idToken));
-
-        console.log('res', res);
-        showSuccessMsg('Login successful!');
-        // navigation.navigate(RouteName.BottomTabStack);
-        resetForm();
-      } catch (err: any) {}
+      await attemptLogin(values.email, values.password, resetForm);
     },
   });
 
-  const handleLogin = async () => {
-    await formik.validateForm();
-    const firstError = Object.values(formik.errors)[0];
-    if (firstError) {
-      showMessage({ message: firstError as string, type: 'danger' });
+  const handleLogin = () => {
+    if (isLoading) {
       return;
     }
-    formik.handleSubmit();
+    // Dismiss focus so iOS commits Keychain/AutoFill into the native field and fires onChange* once.
+    passwordInputRef.current?.blur();
+    emailInputRef.current?.blur();
+    Keyboard.dismiss();
+    // One tick of delay so native value syncs to JS before we validate and submit.
+    setTimeout(() => {
+      const email = (emailDraftRef.current || formik.values.email).trim();
+      const password = passwordDraftRef.current || formik.values.password;
+
+      void (async () => {
+        try {
+          await loginSchema.validate({ email, password });
+        } catch (e: unknown) {
+          const msg = getYupFirstError(e) ?? 'Check your input';
+          showMessage({ message: msg, type: 'danger' });
+          return;
+        }
+        formik.setValues({ email, password }, false);
+        await attemptLogin(email, password, formik.resetForm);
+      })();
+    }, 100);
   };
 
   const handleResetPassword = () => {
     navigation.navigate(RouteName.ResetPassword);
   };
 
-  /** iOS/Android password autofill often fills the field without firing onChangeText; onChange usually still runs. */
+  /** iOS/Android autofill: prefer native `text` so Formik state matches the visible field. */
   const syncEmailFromNativeChange = (
     e: NativeSyntheticEvent<TextInputChangeEventData>,
   ) => {
     const text = e.nativeEvent.text;
-    if (text !== undefined && text !== formik.values.email) {
-      formik.setFieldValue('email', text, false);
+    if (text !== undefined) {
+      emailDraftRef.current = text;
+      if (text !== formik.values.email) {
+        formik.setFieldValue('email', text, false);
+      }
     }
   };
 
@@ -85,8 +135,11 @@ const Login = ({ navigation }: LoginProps) => {
     e: NativeSyntheticEvent<TextInputChangeEventData>,
   ) => {
     const text = e.nativeEvent.text;
-    if (text !== undefined && text !== formik.values.password) {
-      formik.setFieldValue('password', text, false);
+    if (text !== undefined) {
+      passwordDraftRef.current = text;
+      if (text !== formik.values.password) {
+        formik.setFieldValue('password', text, false);
+      }
     }
   };
 
@@ -107,11 +160,15 @@ const Login = ({ navigation }: LoginProps) => {
 
           <View style={{ gap: 12 }}>
             <PrimaryInput
+              ref={emailInputRef}
               leftImageSource={icons.email}
               placeholder="Email"
               keyboardType="email-address"
               value={formik.values.email}
-              onChangeText={formik.handleChange('email')}
+              onChangeText={text => {
+                emailDraftRef.current = text;
+                formik.handleChange('email')(text);
+              }}
               onChange={syncEmailFromNativeChange}
               autoCapitalize="none"
               autoCorrect={false}
@@ -121,12 +178,16 @@ const Login = ({ navigation }: LoginProps) => {
             />
 
             <PrimaryInput
+              ref={passwordInputRef}
               leftImageSource={icons.lock}
               placeholder="Password"
               secureTextEntry
               iconColor={colors.primary}
               value={formik.values.password}
-              onChangeText={formik.handleChange('password')}
+              onChangeText={text => {
+                passwordDraftRef.current = text;
+                formik.handleChange('password')(text);
+              }}
               onChange={syncPasswordFromNativeChange}
               textContentType="password"
               autoComplete="password"
@@ -198,6 +259,20 @@ const Login = ({ navigation }: LoginProps) => {
     </SafeAreaView>
   );
 };
+
+function getYupFirstError(e: unknown): string | null {
+  if (e && typeof e === 'object') {
+    const inner = (e as { inner?: { message?: string }[] }).inner;
+    if (Array.isArray(inner) && inner[0]?.message) {
+      return inner[0].message;
+    }
+    const err = (e as { errors?: string[] }).errors;
+    if (Array.isArray(err) && err[0]) {
+      return err[0];
+    }
+  }
+  return null;
+}
 
 export default Login;
 

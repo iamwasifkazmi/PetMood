@@ -88,6 +88,18 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
 ];
 
 /**
+ * react-native-iap / OpenIAP v14+ often exposes the store SKU as `id` (iOS subscription products).
+ */
+export function getProductIdFromIapProduct(p: {
+  productId?: string;
+  productIdentifier?: string;
+  id?: string;
+}): string | undefined {
+  const id = p?.productId || p?.productIdentifier || p?.id;
+  return id || undefined;
+}
+
+/**
  * Get all product IDs as an array
  */
 export const getAllProductIds = (): string[] => {

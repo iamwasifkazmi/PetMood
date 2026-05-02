@@ -1,13 +1,14 @@
 // App.tsx
 import React from 'react';
-import { LogBox } from 'react-native';
+import { ActivityIndicator, LogBox, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider } from 'react-redux';
+import { PersistGate } from 'redux-persist/integration/react';
 import { NavigationContainer } from '@react-navigation/native';
 import FlashMessage from 'react-native-flash-message';
 
-import { store } from './src/features/store';
+import { persistor, store } from './src/features/store';
 import { useTheme } from './src/hooks/useTheme';
 import RootNavigator from './src/navigation'; // This should be your main navigator with auth logic
 import { navigationRef } from './services/navigationService';
@@ -21,11 +22,26 @@ const App = () => {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <Provider store={store}>
-          <NavigationContainer theme={theme} ref={navigationRef}>
-            {/* Render RootNavigator instead of DrawerNavigator directly */}
-            <RootNavigator />
-            <FlashMessage position="top" />
-          </NavigationContainer>
+          <PersistGate
+            persistor={persistor}
+            loading={
+              <View
+                style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: theme.colors.background,
+                }}
+              >
+                <ActivityIndicator size="large" />
+              </View>
+            }
+          >
+            <NavigationContainer theme={theme} ref={navigationRef}>
+              <RootNavigator />
+              <FlashMessage position="top" />
+            </NavigationContainer>
+          </PersistGate>
         </Provider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

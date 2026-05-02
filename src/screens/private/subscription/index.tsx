@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Linking,
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
   Text,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import AppText from '../../../components/Text/AppText';
 import PrimaryButton from '../../../components/buttons/PrimaryButton';
 import Header from '../../../components/header/Header';
@@ -20,13 +21,15 @@ import {
   SUBSCRIPTION_PLANS,
   SUBSCRIPTION_TRIAL_DAYS,
   SUBSCRIPTION_TRIAL_TRIES_PER_DAY,
+  getProductIdFromIapProduct,
 } from '../../../constants/subscription';
 import { Theme } from '../../../common/theme';
 import { showErrMsg, showSuccessMsg } from '../../../utils/flashMessage';
 import { subscriptionService } from '../../../services/subscriptionService';
-import { store } from '../../../features/store';
+import { store, useAppSelector } from '../../../features/store';
 import { setError } from '../../../features/subscription/subscriptionSlice';
-import { DrawerActions } from '@react-navigation/native';
+import { useCancelSubscriptionMutation } from '../../../features/subscription/subscriptionApiSlice';
+import type { SubscriptionStatus } from '../../../features/subscription/types';
 import {
   PRIVACY_POLICY_WEB_URL,
   TERMS_AND_CONDITIONS_URL,
@@ -36,8 +39,22 @@ import {
 /** Opens Apple’s subscription management (Safari / account). */
 const APPLE_SUBSCRIPTIONS_MANAGE_URL = 'https://apps.apple.com/account/subscriptions';
 
+function isActivePlanRow(
+  productId: string,
+  planType: 'premium' | 'family',
+  period: 'monthly' | 'annual',
+  sub: SubscriptionStatus | null | undefined,
+): boolean {
+  if (!sub?.isActive) {
+    return false;
+  }
+  if (sub.productId) {
+    return sub.productId === productId;
+  }
+  return sub.planType === planType && sub.period === period;
+}
+
 const Subscription = () => {
-  const navigation = useNavigation();
   const { colors, spacing } = useTheme();
   const styles = useStyles(colors, spacing);
   const {
@@ -49,19 +66,59 @@ const Subscription = () => {
     isInitialized,
     purchaseSubscription,
     restorePurchases,
+    refetchStatus,
+    refreshAll,
+    subscriptionStatusResolved,
   } = useSubscription();
+
+  const [cancelSubscription, { isLoading: isCancellingViaApi }] =
+    useCancelSubscriptionMutation();
+
+  useFocusEffect(
+    useCallback(() => {
+      void refetchStatus();
+    }, [refetchStatus]),
+  );
 
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const [isPullRefreshing, setIsPullRefreshing] = useState(false);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
+
+  /** IAP purchase flow only (not plans query) — used to sync local spinner with StoreKit */
+  const purchaseLoading = useAppSelector(
+    state => state.subscription?.isLoading ?? false,
+  );
+  const prevPurchaseLoading = useRef(purchaseLoading);
+  const purchaseFallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   // Clear loader when Redux error is set (e.g. from purchase error listener)
   useEffect(() => {
     if (error) {
+      if (purchaseFallbackTimeoutRef.current) {
+        clearTimeout(purchaseFallbackTimeoutRef.current);
+        purchaseFallbackTimeoutRef.current = null;
+      }
       setIsPurchasing(false);
       setSelectedPlan(null);
     }
   }, [error]);
+
+  // When user cancels/closes the StoreKit sheet, listener sets isLoading false without setting error
+  useEffect(() => {
+    const wasLoading = prevPurchaseLoading.current;
+    prevPurchaseLoading.current = purchaseLoading;
+    if (wasLoading && !purchaseLoading && isPurchasing) {
+      if (purchaseFallbackTimeoutRef.current) {
+        clearTimeout(purchaseFallbackTimeoutRef.current);
+        purchaseFallbackTimeoutRef.current = null;
+      }
+      setIsPurchasing(false);
+      setSelectedPlan(null);
+    }
+  }, [purchaseLoading, isPurchasing]);
 
   // Capture console logs for debugging
   useEffect(() => {
@@ -120,10 +177,8 @@ const Subscription = () => {
 
   // Get product price from Apple (if available)
   const getProductPrice = (productId: string): string => {
-    // Find product by checking productId property
     const product = products.find((p: any) => {
-      const id = p.productId || p.productIdentifier;
-      return id === productId;
+      return getProductIdFromIapProduct(p) === productId;
     });
     
     if (product) {
@@ -139,9 +194,107 @@ const Subscription = () => {
     return plan?.priceFormatted || '';
   };
 
+  /** Product IDs returned by App Store (StoreKit) — only these may be purchased */
+  const availableStoreProductIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const p of products) {
+      const id = getProductIdFromIapProduct(p as any);
+      if (id) {
+        ids.add(id);
+      }
+    }
+    return ids;
+  }, [products]);
+
+  const premiumPlansFromStore = useMemo(
+    () =>
+      SUBSCRIPTION_PLANS.filter(
+        plan => plan.type === 'premium' && availableStoreProductIds.has(plan.productId),
+      ),
+    [availableStoreProductIds],
+  );
+
+  const familyPlansFromStore = useMemo(
+    () =>
+      SUBSCRIPTION_PLANS.filter(
+        plan => plan.type === 'family' && availableStoreProductIds.has(plan.productId),
+      ),
+    [availableStoreProductIds],
+  );
+
+  /** When StoreKit returns no products (sandbox delay, etc.), still list plans from GET /plans or local config */
+  const premiumPlansToShow = useMemo(() => {
+    if (Platform.OS !== 'ios') {
+      return [];
+    }
+    if (premiumPlansFromStore.length > 0) {
+      return premiumPlansFromStore;
+    }
+    const ids = backendPlans
+      .filter(b => b.plan_type === 'premium')
+      .map(b => b.product_id);
+    if (ids.length > 0) {
+      return SUBSCRIPTION_PLANS.filter(
+        p => p.type === 'premium' && ids.includes(p.productId),
+      );
+    }
+    return SUBSCRIPTION_PLANS.filter(p => p.type === 'premium');
+  }, [premiumPlansFromStore, backendPlans]);
+
+  const familyPlansToShow = useMemo(() => {
+    if (Platform.OS !== 'ios') {
+      return [];
+    }
+    if (familyPlansFromStore.length > 0) {
+      return familyPlansFromStore;
+    }
+    const ids = backendPlans
+      .filter(b => b.plan_type === 'family')
+      .map(b => b.product_id);
+    if (ids.length > 0) {
+      return SUBSCRIPTION_PLANS.filter(
+        p => p.type === 'family' && ids.includes(p.productId),
+      );
+    }
+    return SUBSCRIPTION_PLANS.filter(p => p.type === 'family');
+  }, [familyPlansFromStore, backendPlans]);
+
+  const getDisplayPrice = (productId: string) => {
+    const fromStore = getProductPrice(productId);
+    if (fromStore) {
+      return fromStore;
+    }
+    const bp = backendPlans.find(p => p.product_id === productId);
+    if (bp?.price_display?.trim()) {
+      return bp.price_display;
+    }
+    return (
+      SUBSCRIPTION_PLANS.find(p => p.productId === productId)?.priceFormatted || '—'
+    );
+  };
+
   const handlePurchase = async (productId: string) => {
     if (Platform.OS !== 'ios') {
       Alert.alert('Not Available', 'Subscriptions are only available on iOS.');
+      return;
+    }
+
+    let canPurchaseFromStore = availableStoreProductIds.has(productId);
+    if (!canPurchaseFromStore) {
+      await refreshAll();
+      try {
+        const fresh = await subscriptionService.getAvailableProducts();
+        canPurchaseFromStore = fresh.some(
+          p => getProductIdFromIapProduct(p as any) === productId,
+        );
+      } catch {
+        canPurchaseFromStore = false;
+      }
+    }
+    if (!canPurchaseFromStore) {
+      showErrMsg(
+        'This plan is not available from the App Store yet. Pull down to refresh or try again in a moment.',
+      );
       return;
     }
 
@@ -172,7 +325,11 @@ const Subscription = () => {
       // Don't show success here - wait for purchase listener
       // The purchase dialog will appear from iOS
       // Fallback: clear loader after 15s if nothing happened (e.g. purchase dialog never appears or error not thrown)
-      setTimeout(() => {
+      if (purchaseFallbackTimeoutRef.current) {
+        clearTimeout(purchaseFallbackTimeoutRef.current);
+      }
+      purchaseFallbackTimeoutRef.current = setTimeout(() => {
+        purchaseFallbackTimeoutRef.current = null;
         setIsPurchasing(false);
         setSelectedPlan(null);
       }, 15000);
@@ -216,7 +373,41 @@ const Subscription = () => {
     }
     const planType = subscription.planType === 'premium' ? 'Premium' : 'Family';
     const period = subscription.period === 'monthly' ? 'Monthly' : 'Annual';
-    return `${planType} - ${period}`;
+    if (subscription.isTrial) {
+      return `${planType} · ${period} · Free trial`;
+    }
+    return `${planType} · ${period} · Paid`;
+  };
+
+  const onRefresh = useCallback(async () => {
+    setIsPullRefreshing(true);
+    try {
+      await refreshAll();
+    } catch (e) {
+      console.error('Subscription pull-to-refresh failed', e);
+    } finally {
+      setIsPullRefreshing(false);
+    }
+  }, [refreshAll]);
+
+  const openManageSubscription = async () => {
+    if (Platform.OS !== 'ios') {
+      return;
+    }
+    try {
+      const res = await cancelSubscription().unwrap();
+      const url = res?.manageSubscriptionUrl;
+      if (url) {
+        const ok = await Linking.canOpenURL(url);
+        if (ok) {
+          await Linking.openURL(url);
+        }
+        return;
+      }
+    } catch (e) {
+      console.warn('Cancel subscription API failed, using fallback URL', e);
+    }
+    await Linking.openURL(APPLE_SUBSCRIPTIONS_MANAGE_URL);
   };
 
   return (
@@ -226,6 +417,14 @@ const Subscription = () => {
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: spacing.padding }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isPullRefreshing}
+            onRefresh={onRefresh}
+            tintColor={Platform.OS === 'ios' ? colors.primary : undefined}
+            colors={Platform.OS === 'android' ? [colors.primary] : undefined}
+          />
+        }
       >
         <AppText
           variant="heading"
@@ -234,6 +433,58 @@ const Subscription = () => {
         >
           Subscription Plans
         </AppText>
+
+        {Platform.OS === 'ios' && (
+          <View style={[styles.statusCard, { marginBottom: 16 }]}>
+            <AppText fontWeight="bold" style={{ marginBottom: 6 }}>
+              Your subscription
+            </AppText>
+            {!subscriptionStatusResolved && (
+              <AppText color={colors.caption}>Checking your plan…</AppText>
+            )}
+            {subscriptionStatusResolved && subscription?.isActive && (
+              <>
+                <AppText color={colors.text} fontWeight="semiBold">
+                  {getCurrentPlanDisplay()}
+                </AppText>
+                {subscription.isTrial && (
+                  <AppText
+                    size={12}
+                    color={colors.caption}
+                    style={{ marginTop: 6, lineHeight: 18 }}
+                  >
+                    Trial active — up to {SUBSCRIPTION_TRIAL_TRIES_PER_DAY} scans per UTC
+                    day.
+                    {subscription.trialDaysLeft != null
+                      ? ` About ${subscription.trialDaysLeft} full day(s) left in the trial window.`
+                      : ''}
+                  </AppText>
+                )}
+                {!subscription.isTrial && (
+                  <AppText
+                    size={12}
+                    color={colors.caption}
+                    style={{ marginTop: 6 }}
+                  >
+                    Paid subscription (billed through Apple).
+                  </AppText>
+                )}
+                {subscription.expiresAt && (
+                  <AppText size={12} color={colors.caption} style={{ marginTop: 8 }}>
+                    Renews / expires:{' '}
+                    {new Date(subscription.expiresAt).toLocaleString()}
+                  </AppText>
+                )}
+              </>
+            )}
+            {subscriptionStatusResolved && !subscription?.isActive && (
+              <AppText color={colors.caption}>
+                No active subscription — you’re on the free tier. Choose a plan below to
+                unlock premium.
+              </AppText>
+            )}
+          </View>
+        )}
 
         {/* Subscription Benefits Description */}
         <View style={styles.benefitsCard}>
@@ -273,25 +524,6 @@ const Subscription = () => {
             </View>
           )}
         </View>
-
-        {/* Current Subscription Status */}
-        {subscription && (
-          <View style={styles.statusCard}>
-            <AppText fontWeight="bold" style={{ marginBottom: 4 }}>
-              Current Plan
-            </AppText>
-            <AppText color={colors.caption}>{getCurrentPlanDisplay()}</AppText>
-            {subscription.expiresAt && (
-              <AppText
-                size={12}
-                color={colors.caption}
-                style={{ marginTop: 4 }}
-              >
-                Expires: {new Date(subscription.expiresAt).toLocaleDateString()}
-              </AppText>
-            )}
-          </View>
-        )}
 
         {error && !error.includes('Unable to start purchase') && (
           <View style={[styles.statusCard, { backgroundColor: colors.danger + '20' }]}>
@@ -345,14 +577,6 @@ const Subscription = () => {
           </View>
         )}
 
-        {/* Loading State */}
-        {!isInitialized && Platform.OS === 'ios' && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <AppText style={{ marginTop: 16 }}>Loading subscription plans...</AppText>
-          </View>
-        )}
-
         {/* Single place: free trial, billing, cancel (Apple) — plan cards stay short below */}
         {Platform.OS === 'ios' && (
           <View style={[styles.statusCard, styles.trialInfoCard]}>
@@ -372,17 +596,107 @@ const Subscription = () => {
               Subscription.
             </AppText>
             <TouchableOpacity
-              onPress={() => Linking.openURL(APPLE_SUBSCRIPTIONS_MANAGE_URL)}
+              onPress={() => void openManageSubscription()}
               style={{ marginTop: 12 }}
+              disabled={isCancellingViaApi}
             >
-              <AppText size={13} color={colors.primary} fontWeight="semiBold">
-                Open Apple subscription management →
-              </AppText>
+              {isCancellingViaApi ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <AppText size={13} color={colors.primary} fontWeight="semiBold">
+                  Cancel or manage in App Store (opens Apple) →
+                </AppText>
+              )}
             </TouchableOpacity>
+            <AppText
+              size={10}
+              color={colors.caption}
+              style={{ marginTop: 6, lineHeight: 15 }}
+            >
+              This calls the server first (Apple does not allow apps to cancel
+              subscriptions in-app). You will finish in Apple’s subscription
+              settings in Safari.
+            </AppText>
           </View>
         )}
 
-        {/* Premium Plans */}
+        {/* StoreKit: optional notice — plans still show from server/local when store is empty */}
+        {Platform.OS === 'ios' && !isInitialized && backendPlans.length === 0 && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <AppText style={{ marginTop: 16 }}>Loading plans…</AppText>
+          </View>
+        )}
+
+        {Platform.OS === 'ios' &&
+          isInitialized &&
+          products.length === 0 &&
+          premiumPlansToShow.length > 0 && (
+            <View
+              style={[
+                styles.statusCard,
+                { marginTop: 8, backgroundColor: colors.primary + '14' },
+              ]}
+            >
+              <AppText fontWeight="bold" color={colors.primary} style={{ marginBottom: 6 }}>
+                App Store prices pending
+              </AppText>
+              <AppText size={13} color={colors.text} style={{ lineHeight: 20 }}>
+                The App Store has not returned product prices yet (common in sandbox or
+                right after install). Plan options below still show — prices may come from
+                the server or defaults until Apple responds. Pull down to refresh.
+              </AppText>
+            </View>
+          )}
+
+        {Platform.OS === 'ios' &&
+          isInitialized &&
+          products.length === 0 &&
+          premiumPlansToShow.length === 0 &&
+          familyPlansToShow.length === 0 && (
+            <View
+              style={[
+                styles.statusCard,
+                { marginTop: 16, backgroundColor: colors.danger + '14' },
+              ]}
+            >
+              <AppText fontWeight="bold" color={colors.danger} style={{ marginBottom: 8 }}>
+                Subscription plans unavailable
+              </AppText>
+              <AppText size={13} color={colors.text} style={{ lineHeight: 20 }}>
+                We could not load plans from the App Store or the server. Check your
+                connection and pull down to refresh.
+              </AppText>
+            </View>
+          )}
+
+        {Platform.OS === 'ios' &&
+          isInitialized &&
+          products.length > 0 &&
+          premiumPlansFromStore.length === 0 &&
+          familyPlansFromStore.length === 0 &&
+          premiumPlansToShow.length === 0 &&
+          familyPlansToShow.length === 0 && (
+            <View
+              style={[
+                styles.statusCard,
+                { marginTop: 16, backgroundColor: colors.danger + '14' },
+              ]}
+            >
+              <AppText fontWeight="bold" color={colors.danger} style={{ marginBottom: 8 }}>
+                Plan configuration mismatch
+              </AppText>
+              <AppText size={13} color={colors.text} style={{ lineHeight: 20 }}>
+                The App Store returned products, but none match this app’s subscription
+                IDs. Check that product identifiers in App Store Connect match the app
+                configuration.
+              </AppText>
+            </View>
+          )}
+
+        {/* Premium Plans — from Store when available, else from GET /plans / local config */}
+        {Platform.OS === 'ios' && premiumPlansToShow.length > 0 && (
+            <>
         <AppText
           variant="subheading"
           fontWeight="bold"
@@ -391,10 +705,14 @@ const Subscription = () => {
           Premium Plan
         </AppText>
 
-        {SUBSCRIPTION_PLANS.filter(p => p.type === 'premium').map(plan => {
+        {premiumPlansToShow.map(plan => {
           const isSelected = selectedPlan === plan.productId;
-          const isCurrentPlan =
-            subscription?.productId === plan.productId && subscription?.isActive;
+          const isCurrentPlan = isActivePlanRow(
+            plan.productId,
+            plan.type,
+            plan.period,
+            subscription,
+          );
 
           return (
             <TouchableOpacity
@@ -405,8 +723,6 @@ const Subscription = () => {
                 isSelected && styles.selectedPlanCard,
               ]}
               onPress={() => handlePurchase(plan.productId)}
-              // Allow tap even if IAP isn't fully initialized yet;
-              // handlePurchase will lazily initialize and handle errors.
               disabled={isPurchasing || isCurrentPlan}
             >
               <View style={styles.planHeader}>
@@ -426,7 +742,7 @@ const Subscription = () => {
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <AppText fontWeight="bold" size={20} color={colors.primary}>
-                    {getProductPrice(plan.productId) || plan.priceFormatted}
+                    {getDisplayPrice(plan.productId)}
                   </AppText>
                   <AppText size={10} color={colors.caption} style={{ marginTop: 4 }}>
                     after trial
@@ -455,8 +771,12 @@ const Subscription = () => {
             </TouchableOpacity>
           );
         })}
+            </>
+          )}
 
         {/* Family Plans */}
+        {Platform.OS === 'ios' && familyPlansToShow.length > 0 && (
+            <>
         <AppText
           variant="subheading"
           fontWeight="bold"
@@ -465,10 +785,14 @@ const Subscription = () => {
           Family Plan (optional, +2 pets)
         </AppText>
 
-        {SUBSCRIPTION_PLANS.filter(p => p.type === 'family').map(plan => {
+        {familyPlansToShow.map(plan => {
           const isSelected = selectedPlan === plan.productId;
-          const isCurrentPlan =
-            subscription?.productId === plan.productId && subscription?.isActive;
+          const isCurrentPlan = isActivePlanRow(
+            plan.productId,
+            plan.type,
+            plan.period,
+            subscription,
+          );
 
           return (
             <TouchableOpacity
@@ -479,8 +803,6 @@ const Subscription = () => {
                 isSelected && styles.selectedPlanCard,
               ]}
               onPress={() => handlePurchase(plan.productId)}
-              // Allow tap even if IAP isn't fully initialized yet;
-              // handlePurchase will lazily initialize and handle errors.
               disabled={isPurchasing || isCurrentPlan}
             >
               <View style={styles.planHeader}>
@@ -500,7 +822,7 @@ const Subscription = () => {
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <AppText fontWeight="bold" size={20} color={colors.primary}>
-                    {getProductPrice(plan.productId) || plan.priceFormatted}
+                    {getDisplayPrice(plan.productId)}
                   </AppText>
                   <AppText size={10} color={colors.caption} style={{ marginTop: 4 }}>
                     after trial
@@ -529,6 +851,8 @@ const Subscription = () => {
             </TouchableOpacity>
           );
         })}
+            </>
+          )}
 
         {/* Restore Purchases Button */}
         <PrimaryButton

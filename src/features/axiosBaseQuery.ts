@@ -26,12 +26,20 @@ const axiosBaseQuery =
   async ({ url, method, data, params, headers, _baseUrl }) => {
     try {
       const token = store.getState()?.auth?.token;
+      const resolvedBase =
+        typeof _baseUrl === 'string' ? _baseUrl : baseUrl;
+      const absoluteUrl =
+        typeof url === 'string' && /^https?:\/\//i.test(url)
+          ? url
+          : `${resolvedBase ?? ''}${url ?? ''}`;
+      /** Firebase Identity Toolkit must not receive a stale app JWT (breaks sign-in). */
+      const skipAuthBearer =
+        absoluteUrl.includes('identitytoolkit.googleapis.com') ||
+        absoluteUrl.includes('securetoken.googleapis.com');
       console.info(
         '******** API CALL ********',
         '\nreq-method: ' + method,
-        '\nreq-url: ' +
-          (typeof _baseUrl === 'string' ? _baseUrl : baseUrl) +
-          url,
+        '\nreq-url: ' + absoluteUrl,
         // '\nreq-headers: ' + JSON.stringify(headers),
         '\nreq-token: ' + token,
         '\nreq-data: ' + JSON.stringify(data),
@@ -44,9 +52,10 @@ const axiosBaseQuery =
         data,
         params,
         headers: {
-          ...(token && {
-            Authorization: `Bearer ${token}`,
-          }),
+          ...(token &&
+            !skipAuthBearer && {
+              Authorization: `Bearer ${token}`,
+            }),
           ...headers,
         },
       });
@@ -84,9 +93,38 @@ const axiosBaseQuery =
               .toLowerCase()
               .includes('consent required')));
 
+      const isTrialScanLimit =
+        status === 429 &&
+        typeof data === 'object' &&
+        data !== null &&
+        typeof (data as any).resetsAt === 'string';
+
       // Show error message in UI unless it's the consent-enforcement 403 (handled by the scanner UI)
       if (!isAiConsentRequired) {
-        showErrMsg(detail);
+        if (isTrialScanLimit) {
+          const d = data as {
+            detail?: string;
+            resetsAt: string;
+            used?: number;
+            limit?: number;
+            remaining?: number;
+          };
+          const t = new Date(d.resetsAt);
+          const resetLabel = Number.isNaN(t.getTime())
+            ? d.resetsAt
+            : t.toLocaleString();
+          const head =
+            d.detail || 'You have hit the limit for this period. Please try again later.';
+          const usage =
+            d.limit != null && d.used != null
+              ? ` Uses this UTC day: ${d.used}/${d.limit}.`
+              : '';
+          showErrMsg(
+            `${head}${usage} You can try again after ${resetLabel} (server uses midnight UTC for the daily count).`,
+          );
+        } else {
+          showErrMsg(detail);
+        }
       }
 
       // Only force logout on auth-related 403s (not on consent-enforcement)

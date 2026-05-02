@@ -148,6 +148,10 @@ const Scanner = () => {
         await openConsent(provider);
         return;
       }
+      if (error?.status === 429) {
+        // Global handler already showed trial/daily limit + resetsAt
+        return;
+      }
       Alert.alert(
         'Upload Failed',
         'Unable to upload the scan. Please try again.',

@@ -8,6 +8,12 @@ export interface SubscriptionStatus {
   period: 'monthly' | 'annual' | null;
   expiresAt: string | null;
   productId: string | null;
+  /** From GET /api/subscriptions/status — backend is source of truth */
+  isTrial: boolean;
+  /** Total trial days when on trial; null if not on trial or unknown */
+  trialDays: number | null;
+  /** Remaining full trial days, derived by backend from expires_at */
+  trialDaysLeft: number | null;
 }
 
 // Backend subscription format (from API)
@@ -74,4 +80,13 @@ export interface PlansResponse {
 
 export interface RestorePurchasesResponse {
   subscriptions: SubscriptionStatus[];
+}
+
+/** POST /api/subscriptions/cancel */
+export interface CancelSubscriptionResponse {
+  success: boolean;
+  platform?: string;
+  canCancelDirectlyFromBackend?: boolean;
+  message?: string;
+  manageSubscriptionUrl: string;
 }

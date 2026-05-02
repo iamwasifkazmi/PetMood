@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, forwardRef } from 'react';
 import {
   StyleSheet,
   TextInput,
@@ -28,20 +28,23 @@ type PrimaryInputProps = TextInputProps & {
   iconColor?: string;
 };
 
-const PrimaryInput = ({
-  containerStyle,
-  rightImageSource,
-  leftImageSource,
-  leftIcon,
-  rightIcon,
-  LeftIconComponent,
-  RightIconComponent,
-  onLeftIconPress,
-  onRightIconPress,
-  iconSize = 20,
-  iconColor = '#1C6971',
-  ...props
-}: PrimaryInputProps) => {
+const PrimaryInput = forwardRef<TextInput, PrimaryInputProps>(function PrimaryInput(
+  {
+    containerStyle,
+    rightImageSource,
+    leftImageSource,
+    leftIcon,
+    rightIcon,
+    LeftIconComponent,
+    RightIconComponent,
+    onLeftIconPress,
+    onRightIconPress,
+    iconSize = 20,
+    iconColor = '#1C6971',
+    ...props
+  },
+  ref,
+) {
   const { colors, fonts } = useTheme();
 
   const [isFocused, setIsFocused] = useState(false);
@@ -106,6 +109,7 @@ const PrimaryInput = ({
 
       {/* TextInput */}
       <TextInput
+        ref={ref}
         placeholderTextColor={colors.placeholder}
         {...props}
         onFocus={e => {
@@ -148,6 +152,6 @@ const PrimaryInput = ({
       ) : null}
     </View>
   );
-};
+});
 
 export default PrimaryInput;

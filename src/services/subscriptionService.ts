@@ -12,11 +12,10 @@ import {
   PurchaseError,
 } from 'react-native-iap';
 import { Platform } from 'react-native';
-import { getAllProductIds } from '../constants/subscription';
+import { getAllProductIds, getProductIdFromIapProduct } from '../constants/subscription';
 import { store } from '../features/store';
 import { setSubscription, setError, setLoading } from '../features/subscription/subscriptionSlice';
 import { subscriptionApiSlice } from '../features/subscription/subscriptionApiSlice';
-import { SubscriptionStatus } from '../features/subscription/types';
 
 /** react-native-iap v14+ requires explicit subscription shape; flat `{ sku }` fails with "Missing purchase request configuration". */
 function requestSubscriptionPurchaseIOS(sku: string) {
@@ -93,8 +92,11 @@ class SubscriptionService {
       const errorCode = (error as any)?.code || (error as any)?.errorCode;
       const errorMessage = error?.message || (error as any)?.localizedDescription || 'Purchase failed';
       
-      // Don't show error for user cancellations
-      if (errorCode === 'E_USER_CANCELLED' || errorMessage.toLowerCase().includes('cancel')) {
+      const isUserCancelled =
+        errorCode === 'E_USER_CANCELLED' ||
+        String(errorCode).toLowerCase() === 'user-cancelled' ||
+        errorMessage.toLowerCase().includes('cancel');
+      if (isUserCancelled) {
         console.log('User cancelled purchase');
         store.dispatch(setLoading(false));
         return;
@@ -163,32 +165,33 @@ class SubscriptionService {
       );
 
       const result = await verifyReceipt;
-      
+
       console.log('Receipt verification result:', {
         success: result.data?.success,
         subscription: result.data?.subscription,
         error: result.error,
       });
-      
-      if (result.data?.success && result.data.subscription) {
-        // Convert backend snake_case to app camelCase
-        const sub = result.data.subscription;
-        const subscription: SubscriptionStatus = {
-          isActive: sub.is_active,
-          planType: sub.plan_type,
-          period: sub.period,
-          expiresAt: sub.expires_at,
-          productId: productId,
-        };
-        console.log('Subscription verified successfully:', subscription);
-        store.dispatch(setSubscription(subscription));
+
+      if (result.data?.success) {
+        // Entitlement: GET /api/subscriptions/status is the source of truth
+        const status = await store.dispatch(
+          subscriptionApiSlice.endpoints.getSubscriptionStatus.initiate(),
+        );
+        if (status.data?.subscription) {
+          console.log('Subscription from status (canonical):', status.data.subscription);
+          store.dispatch(setSubscription(status.data.subscription));
+        } else {
+          const errMsg =
+            'Purchase was verified, but we could not load your subscription. Try Restore or open subscription settings again in a moment.';
+          console.error('verify-receipt ok but no status');
+          store.dispatch(setError(errMsg));
+        }
         store.dispatch(setLoading(false));
       } else {
         const errorMsg = result.data?.message || (result.error as any)?.message || 'Failed to verify purchase';
         console.error('Receipt verification failed:', errorMsg);
         store.dispatch(setError(errorMsg));
         store.dispatch(setLoading(false));
-        // Don't throw - just log the error
       }
     } catch (error: any) {
       console.error('Error verifying receipt:', error);
@@ -248,16 +251,16 @@ class SubscriptionService {
         if (availableProducts.length > 0) {
           // Check if the specific product exists
           const product = availableProducts.find((p: any) => {
-            const id = p.productId || p.productIdentifier || (p as any).product_id;
+            const id = getProductIdFromIapProduct(p);
             return id === productId;
           });
           
           if (product) {
-            const foundId = product.productId || product.productIdentifier || (product as any).product_id;
+            const foundId = getProductIdFromIapProduct(product);
             console.log('Product found:', foundId);
           } else {
-            const availableIds = availableProducts.map((p: any) => 
-              p.productId || p.productIdentifier || (p as any).product_id
+            const availableIds = availableProducts.map((p: any) =>
+              getProductIdFromIapProduct(p) ?? '(unknown)',
             );
             console.warn(`Product ${productId} not found in available products. Available:`, availableIds);
             console.warn('This may happen if subscriptions are still in review.');
@@ -298,7 +301,11 @@ class SubscriptionService {
         const errorMessage = purchaseError?.message || (purchaseError as any)?.localizedDescription || String(purchaseError);
         
         // Handle user cancellation
-        if (errorCode === 'E_USER_CANCELLED' || errorMessage.toLowerCase().includes('cancel')) {
+        if (
+          errorCode === 'E_USER_CANCELLED' ||
+          String(errorCode).toLowerCase() === 'user-cancelled' ||
+          errorMessage.toLowerCase().includes('cancel')
+        ) {
           console.log('User cancelled purchase');
           return;
         }
@@ -359,61 +366,43 @@ class SubscriptionService {
   }
 
   /**
-   * Restore previous purchases
+   * Restore previous purchases: POST /restore, then GET /status (source of truth).
+   * If still no entitlement, verify local StoreKit purchases with verify-receipt.
    */
   async restorePurchases(): Promise<void> {
     try {
       store.dispatch(setLoading(true));
       store.dispatch(setError(null));
 
-      // First, try to get subscription from backend
+      await store.dispatch(
+        subscriptionApiSlice.endpoints.restorePurchases.initiate({}),
+      );
+
       const statusResult = await store.dispatch(
         subscriptionApiSlice.endpoints.getSubscriptionStatus.initiate(),
       );
 
       if (statusResult.data?.subscription) {
-        // Subscription exists in backend (already converted to camelCase by transformResponse)
         store.dispatch(setSubscription(statusResult.data.subscription));
-        store.dispatch(setLoading(false));
         return;
       }
 
-      // If no backend subscription, check iOS purchases
       const purchases = await getAvailablePurchases();
 
       if (purchases.length === 0) {
-        // Try restore endpoint from backend
-        const restoreResult = await store.dispatch(
-          subscriptionApiSlice.endpoints.restorePurchases.initiate({}),
-        );
-        
-        if (restoreResult.data?.subscriptions && restoreResult.data.subscriptions.length > 0) {
-          const activeSub = restoreResult.data.subscriptions.find(s => s.isActive);
-          if (activeSub) {
-            store.dispatch(setSubscription(activeSub));
-            store.dispatch(setLoading(false));
-            return;
-          }
-        }
-        
         store.dispatch(setError('No previous purchases found'));
-        store.dispatch(setLoading(false));
         return;
       }
 
-      // Verify the most recent active subscription
-      const activePurchase = purchases.find(
-        (p: any) => {
-          const id = p.productId || p.productIdentifier;
-          return id && id.startsWith('com.petmood');
-        },
-      );
+      const activePurchase = purchases.find((p: any) => {
+        const id = p.productId || p.productIdentifier;
+        return id && id.startsWith('com.petmood');
+      });
 
       if (activePurchase) {
         await this.handlePurchase(activePurchase as Purchase);
       } else {
         store.dispatch(setError('No active subscription found'));
-        store.dispatch(setLoading(false));
       }
     } catch (error: any) {
       console.error('Error restoring purchases:', error);

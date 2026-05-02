@@ -3,11 +3,30 @@ import config from '../../common/config';
 import axiosBaseQuery from '../axiosBaseQuery';
 import {
   PlansResponse,
+  CancelSubscriptionResponse,
   RestorePurchasesResponse,
   SubscriptionStatus,
   VerifyReceiptRequest,
   VerifyReceiptResponse,
 } from './types';
+
+function mapStatusFromBackend(
+  sub: Record<string, any> | null | undefined,
+): SubscriptionStatus | null {
+  if (!sub) {
+    return null;
+  }
+  return {
+    isActive: Boolean(sub.is_active),
+    planType: sub.plan_type ?? null,
+    period: sub.period ?? null,
+    expiresAt: sub.expires_at ?? null,
+    productId: sub.product_id || null,
+    isTrial: Boolean(sub.is_trial),
+    trialDays: sub.trial_days ?? null,
+    trialDaysLeft: sub.trial_days_left ?? null,
+  };
+}
 
 export const subscriptionApiSlice = createApi({
   baseQuery: axiosBaseQuery({ baseUrl: config.api_base_url }),
@@ -55,22 +74,9 @@ export const subscriptionApiSlice = createApi({
         url: 'subscriptions/status',
         method: 'get',
       }),
-      transformResponse: (response: { subscription: any | null }) => {
-        if (!response.subscription) {
-          return { subscription: null };
-        }
-        // Convert backend snake_case to app camelCase
-        const sub = response.subscription;
-        return {
-          subscription: {
-            isActive: sub.is_active,
-            planType: sub.plan_type,
-            period: sub.period,
-            expiresAt: sub.expires_at,
-            productId: sub.product_id || null,
-          },
-        };
-      },
+      transformResponse: (response: { subscription: any | null }) => ({
+        subscription: mapStatusFromBackend(response.subscription),
+      }),
       providesTags: ['Subscription'],
     }),
 
@@ -88,16 +94,21 @@ export const subscriptionApiSlice = createApi({
           return { subscriptions: [] };
         }
         return {
-          subscriptions: response.subscriptions.map(sub => ({
-            isActive: sub.is_active,
-            planType: sub.plan_type,
-            period: sub.period,
-            expiresAt: sub.expires_at,
-            productId: sub.product_id ?? null,
-          })),
+          subscriptions: response.subscriptions
+            .map((sub: any) => mapStatusFromBackend(sub))
+            .filter((s): s is SubscriptionStatus => s != null),
         };
       },
       invalidatesTags: ['Subscription'],
+    }),
+
+    /** Returns Apple / Google manage URL — backend does not cancel Apple directly */
+    cancelSubscription: build.mutation<CancelSubscriptionResponse, void>({
+      query: () => ({
+        url: 'subscriptions/cancel',
+        method: 'post',
+        data: {},
+      }),
     }),
   }),
 });
@@ -107,4 +118,5 @@ export const {
   useVerifyReceiptMutation,
   useGetSubscriptionStatusQuery,
   useRestorePurchasesMutation,
+  useCancelSubscriptionMutation,
 } = subscriptionApiSlice;
