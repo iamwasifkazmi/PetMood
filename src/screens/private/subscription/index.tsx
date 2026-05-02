@@ -65,7 +65,6 @@ const Subscription = () => {
     error,
     isInitialized,
     purchaseSubscription,
-    restorePurchases,
     refetchStatus,
     refreshAll,
     subscriptionStatusResolved,
@@ -379,6 +378,7 @@ const Subscription = () => {
     }
   };
 
+  /* Restore button hidden — re-enable with PrimaryButton below
   const handleRestore = async () => {
     try {
       setIsPurchasing(true);
@@ -391,6 +391,7 @@ const Subscription = () => {
       setIsPurchasing(false);
     }
   };
+  */
 
   const getCurrentPlanDisplay = () => {
     if (!subscription?.isActive) {
@@ -1045,17 +1046,16 @@ const Subscription = () => {
             </>
           )}
 
-        {/* Restore Purchases Button */}
+        {/* Restore Purchases Button — hidden for now
         <PrimaryButton
           title="Restore Purchases"
           type="outlined"
           onPress={handleRestore}
           loading={isPurchasing}
-          // Allow restore on iOS even if IAP hasn't fully initialized;
-          // backend restore endpoint and hook will handle errors.
           disabled={Platform.OS !== 'ios' || isPurchasing}
           style={{ marginTop: 32, marginBottom: 24 }}
         />
+        */}
 
         {/* Required Links - Privacy, EULA, Terms & Conditions (Apple 3.1.2) */}
         <View style={[styles.linksContainer, { flexWrap: 'wrap', justifyContent: 'center' }]}>
