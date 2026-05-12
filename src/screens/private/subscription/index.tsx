@@ -54,6 +54,103 @@ function isActivePlanRow(
   return sub.planType === planType && sub.period === period;
 }
 
+/** Same row as last server-reported plan (active or not), for expired / canceled UI */
+function planRowMatchesBackendSubscription(
+  productId: string,
+  planType: 'premium' | 'family',
+  period: 'monthly' | 'annual',
+  sub: SubscriptionStatus | null | undefined,
+): boolean {
+  if (!sub?.planType || !sub.period) {
+    return false;
+  }
+  if (sub.productId) {
+    return sub.productId === productId;
+  }
+  return sub.planType === planType && sub.period === period;
+}
+
+function normalizeLifecycle(s: string | null | undefined): string {
+  return (s || '').trim().toLowerCase();
+}
+
+function humanizeBackendStatus(status: string | null | undefined): string {
+  const raw = (status || '').trim();
+  if (!raw) {
+    return 'Ended';
+  }
+  const n = raw.toLowerCase();
+  const map: Record<string, string> = {
+    expired: 'Expired',
+    active: 'Active',
+    canceled: 'Canceled',
+    cancelled: 'Canceled',
+    trialing: 'Trial',
+    trial: 'Trial',
+    grace_period: 'Grace period',
+    billing_retry: 'Billing retry',
+  };
+  return map[n] || raw.replace(/_/g, ' ');
+}
+
+function endedPlanRowPillLabel(
+  sub: SubscriptionStatus | null | undefined,
+  matches: boolean,
+): string | null {
+  if (!sub || sub.isActive || !matches) {
+    return null;
+  }
+  const n = normalizeLifecycle(sub.backendStatus);
+  if (n === 'expired') {
+    return 'Expired';
+  }
+  if (n === 'canceled' || n === 'cancelled') {
+    return 'Canceled';
+  }
+  if (sub.backendStatus) {
+    return humanizeBackendStatus(sub.backendStatus);
+  }
+  return 'Ended';
+}
+
+function formatInactivePlanHeadline(sub: SubscriptionStatus): string {
+  const tier =
+    sub.planType === 'family'
+      ? 'Family'
+      : sub.planType === 'premium'
+        ? 'Premium'
+        : null;
+  const cycle =
+    sub.period === 'monthly'
+      ? 'Monthly'
+      : sub.period === 'annual'
+        ? 'Annual'
+        : null;
+  const parts = [tier, cycle].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : 'Your last subscription';
+}
+
+function captionForAccessReason(
+  reason: string | null | undefined,
+): string | null {
+  if (!reason || typeof reason !== 'string') {
+    return null;
+  }
+  const r = reason.trim().toLowerCase();
+  if (r === 'expired_or_not_renewed') {
+    return 'This billing period ended without renewal.';
+  }
+  return reason.replace(/_/g, ' ');
+}
+
+function inactiveSubscriptionHasPlanHistory(
+  sub: SubscriptionStatus | null | undefined,
+): boolean {
+  return Boolean(
+    sub && !sub.isActive && (sub.planType || sub.productId || sub.backendStatus),
+  );
+}
+
 const Subscription = () => {
   const { colors, spacing } = useTheme();
   const styles = useStyles(colors, spacing);
@@ -611,7 +708,96 @@ const Subscription = () => {
                 </AppText>
               </>
             )}
-            {subscriptionStatusResolved && !subscription?.isActive && (
+            {subscriptionStatusResolved &&
+              subscription &&
+              !subscription.isActive &&
+              inactiveSubscriptionHasPlanHistory(subscription) && (
+              <>
+                <View style={styles.subscriptionTitleRow}>
+                  <AppText
+                    color={colors.text}
+                    fontWeight="semiBold"
+                    style={{ flex: 1, flexShrink: 1 }}
+                  >
+                    {formatInactivePlanHeadline(subscription)}
+                  </AppText>
+                  {subscription.backendStatus ? (
+                    <View
+                      style={
+                        (() => {
+                          const lc = normalizeLifecycle(subscription.backendStatus);
+                          if (lc === 'canceled' || lc === 'cancelled') {
+                            return styles.endedNeutralBadge;
+                          }
+                          return styles.expiredStatusBadge;
+                        })()
+                      }
+                    >
+                      <AppText size={11} color={colors.card} fontWeight="bold">
+                        {humanizeBackendStatus(subscription.backendStatus)}
+                      </AppText>
+                    </View>
+                  ) : (
+                    <View style={styles.endedNeutralBadge}>
+                      <AppText size={11} color={colors.card} fontWeight="bold">
+                        Ended
+                      </AppText>
+                    </View>
+                  )}
+                </View>
+                {subscription.expiresAt ? (
+                  <AppText
+                    size={13}
+                    color={colors.text}
+                    style={{ marginTop: 10, lineHeight: 20 }}
+                  >
+                    {((): string => {
+                      const lc = normalizeLifecycle(subscription.backendStatus);
+                      const when = formatDateTimeLocal(subscription.expiresAt);
+                      if (lc === 'expired') {
+                        return `Expired on ${when}`;
+                      }
+                      if (lc === 'canceled' || lc === 'cancelled') {
+                        return `Ended on ${when}`;
+                      }
+                      return `Ended ${when}`;
+                    })()}
+                  </AppText>
+                ) : (
+                  <AppText
+                    size={13}
+                    color={colors.text}
+                    style={{ marginTop: 10, lineHeight: 20 }}
+                  >
+                    {normalizeLifecycle(subscription.backendStatus) === 'expired'
+                      ? 'Subscription has expired — renew anytime below.'
+                      : 'Subscription is inactive — renew below when you’re ready.'}
+                  </AppText>
+                )}
+                {subscription.productId ? (
+                  <AppText size={12} color={colors.caption} style={{ marginTop: 6, lineHeight: 18 }}>
+                    Product: {subscription.productId}
+                  </AppText>
+                ) : null}
+                {captionForAccessReason(subscription.accessReason) ? (
+                  <AppText size={12} color={colors.caption} style={{ marginTop: 8, lineHeight: 18 }}>
+                    {captionForAccessReason(subscription.accessReason)}
+                  </AppText>
+                ) : null}
+                {subscription.accessActive === false &&
+                !captionForAccessReason(subscription.accessReason) ? (
+                  <AppText size={12} color={colors.caption} style={{ marginTop: 8, lineHeight: 18 }}>
+                    Premium access is off until you subscribe again.
+                  </AppText>
+                ) : null}
+                <AppText size={12} color={colors.caption} style={{ marginTop: 10, lineHeight: 18 }}>
+                  The matching plan is highlighted below. Tap any plan to resubscribe or switch.
+                </AppText>
+              </>
+            )}
+            {subscriptionStatusResolved &&
+              !subscription?.isActive &&
+              !inactiveSubscriptionHasPlanHistory(subscription) && (
               <AppText color={colors.caption}>
                 No active subscription — you’re on the free tier. Choose a plan below to
                 unlock premium.
@@ -848,6 +1034,14 @@ const Subscription = () => {
             subscription,
           );
           const lockedOtherPlan = hasActivePlan && !isCurrentPlan;
+          const matchesEndedBackend = planRowMatchesBackendSubscription(
+            plan.productId,
+            plan.type,
+            plan.period,
+            subscription,
+          );
+          const endedRowPill = endedPlanRowPillLabel(subscription, matchesEndedBackend);
+          const emphasizeEndedPlan = Boolean(endedRowPill);
 
           const cardBody = (
             <>
@@ -864,6 +1058,19 @@ const Subscription = () => {
                         </AppText>
                       </View>
                     )}
+                    {!isCurrentPlan && endedRowPill ? (
+                      <View
+                        style={
+                          endedRowPill === 'Canceled'
+                            ? styles.planEndedPillMuted
+                            : styles.planEndedPill
+                        }
+                      >
+                        <AppText size={11} color={colors.card} fontWeight="bold">
+                          {endedRowPill}
+                        </AppText>
+                      </View>
+                    ) : null}
                   </View>
                   <AppText color={colors.caption} size={13} style={{ marginTop: 2 }}>
                     Subscription: {plan.description}
@@ -917,6 +1124,7 @@ const Subscription = () => {
               key={plan.id}
               style={[
                 styles.planCard,
+                emphasizeEndedPlan && styles.planExpiredHighlightCard,
                 isSelected && styles.selectedPlanCard,
                 lockedOtherPlan && styles.planCardDisabled,
               ]}
@@ -957,6 +1165,14 @@ const Subscription = () => {
             subscription,
           );
           const lockedOtherPlan = hasActivePlan && !isCurrentPlan;
+          const matchesEndedBackend = planRowMatchesBackendSubscription(
+            plan.productId,
+            plan.type,
+            plan.period,
+            subscription,
+          );
+          const endedRowPill = endedPlanRowPillLabel(subscription, matchesEndedBackend);
+          const emphasizeEndedPlan = Boolean(endedRowPill);
 
           const cardBody = (
             <>
@@ -973,6 +1189,19 @@ const Subscription = () => {
                         </AppText>
                       </View>
                     )}
+                    {!isCurrentPlan && endedRowPill ? (
+                      <View
+                        style={
+                          endedRowPill === 'Canceled'
+                            ? styles.planEndedPillMuted
+                            : styles.planEndedPill
+                        }
+                      >
+                        <AppText size={11} color={colors.card} fontWeight="bold">
+                          {endedRowPill}
+                        </AppText>
+                      </View>
+                    ) : null}
                   </View>
                   <AppText color={colors.caption} size={13} style={{ marginTop: 2 }}>
                     Subscription: {plan.description}
@@ -1026,6 +1255,7 @@ const Subscription = () => {
               key={plan.id}
               style={[
                 styles.planCard,
+                emphasizeEndedPlan && styles.planExpiredHighlightCard,
                 isSelected && styles.selectedPlanCard,
                 lockedOtherPlan && styles.planCardDisabled,
               ]}
@@ -1143,6 +1373,34 @@ const useStyles = (
       paddingHorizontal: 10,
       paddingVertical: 4,
       borderRadius: 10,
+    },
+    expiredStatusBadge: {
+      backgroundColor: '#B45309',
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 10,
+    },
+    endedNeutralBadge: {
+      backgroundColor: '#6B7280',
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 10,
+    },
+    planEndedPill: {
+      backgroundColor: '#B45309',
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 10,
+    },
+    planEndedPillMuted: {
+      backgroundColor: '#6B7280',
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 10,
+    },
+    planExpiredHighlightCard: {
+      borderColor: '#B45309',
+      backgroundColor: '#B453090D',
     },
     planTitleRow: {
       flexDirection: 'row',

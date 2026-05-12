@@ -14,6 +14,12 @@ export interface SubscriptionStatus {
   trialDays: number | null;
   /** Remaining full trial days, derived by backend from expires_at */
   trialDaysLeft: number | null;
+  /** Maps API `subscription.status`, e.g. active, expired, canceled */
+  backendStatus: string | null;
+  /** Top-level `access_active` from GET /subscriptions/status */
+  accessActive?: boolean | null;
+  /** Top-level `reason`, e.g. expired_or_not_renewed */
+  accessReason?: string | null;
 }
 
 // Backend subscription format (from API)

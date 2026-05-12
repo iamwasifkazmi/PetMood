@@ -12,10 +12,19 @@ import {
 
 function mapStatusFromBackend(
   sub: Record<string, any> | null | undefined,
+  meta?: {
+    access_active?: boolean;
+    reason?: string | null;
+  },
 ): SubscriptionStatus | null {
   if (!sub) {
     return null;
   }
+  const backendStatusRaw = sub.status;
+  const backendStatus =
+    typeof backendStatusRaw === 'string' && backendStatusRaw.trim() !== ''
+      ? backendStatusRaw.trim()
+      : null;
   return {
     isActive: Boolean(sub.is_active),
     planType: sub.plan_type ?? null,
@@ -25,6 +34,11 @@ function mapStatusFromBackend(
     isTrial: Boolean(sub.is_trial),
     trialDays: sub.trial_days ?? null,
     trialDaysLeft: sub.trial_days_left ?? null,
+    backendStatus,
+    accessActive:
+      typeof meta?.access_active === 'boolean' ? meta.access_active : null,
+    accessReason:
+      typeof meta?.reason === 'string' ? meta.reason : null,
   };
 }
 
@@ -74,8 +88,15 @@ export const subscriptionApiSlice = createApi({
         url: 'subscriptions/status',
         method: 'get',
       }),
-      transformResponse: (response: { subscription: any | null }) => ({
-        subscription: mapStatusFromBackend(response.subscription),
+      transformResponse: (response: {
+        subscription: any | null;
+        access_active?: boolean;
+        reason?: string | null;
+      }) => ({
+        subscription: mapStatusFromBackend(response.subscription, {
+          access_active: response.access_active,
+          reason: response.reason,
+        }),
       }),
       providesTags: ['Subscription'],
     }),
