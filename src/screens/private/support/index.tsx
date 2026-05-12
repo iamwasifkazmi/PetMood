@@ -14,6 +14,7 @@ import GlobalBottomSheet, {
   GlobalBottomSheetRef,
 } from '../../../components/views/GlobalBottomSheet';
 import { SuccessImage } from '../../../components/views/SuccessImage';
+import { store, useAppSelector } from '../../../features/store';
 import { useSendSupportMessageMutation } from '../../../features/support/supportApiSlice';
 import { useTheme } from '../../../hooks/useTheme';
 import { supportSchema } from '../../../utils/validations';
@@ -24,9 +25,14 @@ const Support = () => {
   const bottomSheetRef = useRef<GlobalBottomSheetRef>(null);
   const [sendSupportMessage, { isLoading }] = useSendSupportMessageMutation();
 
+  const profileEmail = useAppSelector(
+    state => state.user?.user?.email?.toLowerCase() ?? '',
+  );
+
   const formik = useFormik({
+    enableReinitialize: true,
     initialValues: {
-      email: '',
+      email: profileEmail,
       message: '',
     },
     validationSchema: supportSchema,
@@ -38,7 +44,9 @@ const Support = () => {
           details: values.message,
         }).unwrap();
 
-        resetForm();
+        const emailDefault =
+          store.getState().user?.user?.email?.toLowerCase() ?? '';
+        resetForm({ values: { email: emailDefault, message: '' } });
         bottomSheetRef?.current?.expand();
       } catch (error: any) {}
     },
