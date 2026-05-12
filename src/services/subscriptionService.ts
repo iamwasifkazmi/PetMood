@@ -10,12 +10,48 @@ import {
   PurchaseIOS,
   Product,
   PurchaseError,
+  isUserCancelledError,
 } from 'react-native-iap';
 import { Platform } from 'react-native';
 import { getAllProductIds, getProductIdFromIapProduct } from '../constants/subscription';
 import { store } from '../features/store';
 import { setSubscription, setError, setLoading } from '../features/subscription/subscriptionSlice';
 import { subscriptionApiSlice } from '../features/subscription/subscriptionApiSlice';
+
+/**
+ * Covers StoreKit dismissals: library UserCancelled mapping, SK payment canceled (often 2),
+ * and sandbox sign-in/popup cancellations.
+ */
+function shouldTreatPurchaseErrorAsBenignDismissal(error: unknown): boolean {
+  if (isUserCancelledError(error)) {
+    return true;
+  }
+  const e = error as Record<string, unknown> | undefined;
+  if (!e || typeof e !== 'object') {
+    return false;
+  }
+  if (Platform.OS === 'ios') {
+    const numeric =
+      typeof e.responseCode === 'number'
+        ? e.responseCode
+        : typeof e.code === 'number'
+          ? e.code
+          : typeof e.errorCode === 'number'
+            ? e.errorCode
+            : null;
+    if (numeric === 2) {
+      return true;
+    }
+  }
+  const msg = String(
+    e.localizedDescription ?? e.message ?? '',
+  ).toLowerCase();
+  return (
+    msg.includes('cancel') &&
+    !msg.includes('unable to connect') &&
+    !msg.includes('network')
+  );
+}
 
 /** react-native-iap v14+ requires explicit subscription shape; flat `{ sku }` fails with "Missing purchase request configuration". */
 function requestSubscriptionPurchaseIOS(sku: string) {
@@ -86,21 +122,17 @@ class SubscriptionService {
 
     // Listen for purchase errors
     this.purchaseErrorSubscription = purchaseErrorListener((error: PurchaseError) => {
-      console.error('Purchase error listener:', error);
-      
-      // Extract error information
       const errorCode = (error as any)?.code || (error as any)?.errorCode;
-      const errorMessage = error?.message || (error as any)?.localizedDescription || 'Purchase failed';
-      
-      const isUserCancelled =
-        errorCode === 'E_USER_CANCELLED' ||
-        String(errorCode).toLowerCase() === 'user-cancelled' ||
-        errorMessage.toLowerCase().includes('cancel');
-      if (isUserCancelled) {
-        console.log('User cancelled purchase');
+      const errorMessage =
+        error?.message || (error as any)?.localizedDescription || 'Purchase failed';
+
+      if (shouldTreatPurchaseErrorAsBenignDismissal(error)) {
+        console.log('Purchase dismissed / user cancelled:', errorMessage);
         store.dispatch(setLoading(false));
         return;
       }
+
+      console.error('Purchase error listener:', error);
       
       // Don't show errors for product availability - iOS handles this
       if (
@@ -286,30 +318,29 @@ class SubscriptionService {
         // The purchase will be handled by the purchaseUpdatedListener
         // Don't set loading to false here - let the listener handle it
       } catch (purchaseError: any) {
-        // Handle purchase-specific errors
+        store.dispatch(setLoading(false));
+
+        const errorMessage =
+          purchaseError?.message ||
+          (purchaseError as any)?.localizedDescription ||
+          String(purchaseError);
+
+        // User closed Sign in / IAP — avoid error-level logs
+        if (shouldTreatPurchaseErrorAsBenignDismissal(purchaseError)) {
+          console.log('User cancelled purchase (request path):', errorMessage);
+          return;
+        }
+
         console.error('Purchase request error details:', {
           error: purchaseError,
           code: (purchaseError as any)?.code,
           message: purchaseError?.message,
-          productId: productId,
+          productId,
         });
-        
-        store.dispatch(setLoading(false));
-        
-        // Extract error information
-        const errorCode = (purchaseError as any)?.code || (purchaseError as any)?.errorCode;
-        const errorMessage = purchaseError?.message || (purchaseError as any)?.localizedDescription || String(purchaseError);
-        
-        // Handle user cancellation
-        if (
-          errorCode === 'E_USER_CANCELLED' ||
-          String(errorCode).toLowerCase() === 'user-cancelled' ||
-          errorMessage.toLowerCase().includes('cancel')
-        ) {
-          console.log('User cancelled purchase');
-          return;
-        }
-        
+
+        const errorCode =
+          (purchaseError as any)?.code || (purchaseError as any)?.errorCode;
+
         // Handle product availability errors - don't show error, iOS handles it
         if (
           errorMessage.includes('not available') || 

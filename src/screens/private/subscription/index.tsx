@@ -443,9 +443,22 @@ const Subscription = () => {
       // iOS will show its own error if product doesn't exist
       // This is better for review/testing scenarios
       await purchaseSubscription(productId);
-      // Don't show success here - wait for purchase listener
-      // The purchase dialog will appear from iOS
-      // Fallback: clear loader after 15s if nothing happened (e.g. purchase dialog never appears or error not thrown)
+
+      // When the user dismisses the Apple IAP / Sign in sheet, `purchaseSubscription`
+      // often resolves immediately with Redux loading already cleared. Clear the card
+      // spinner here instead of waiting a frame for the purchaseLoading → useEffect path.
+      if (!store.getState().subscription?.isLoading) {
+        if (purchaseFallbackTimeoutRef.current) {
+          clearTimeout(purchaseFallbackTimeoutRef.current);
+          purchaseFallbackTimeoutRef.current = null;
+        }
+        setIsPurchasing(false);
+        setSelectedPlan(null);
+        return;
+      }
+
+      // Purchase flow still active (verification, etc.)
+      // Fallback: clear loader after 15s if nothing settles
       if (purchaseFallbackTimeoutRef.current) {
         clearTimeout(purchaseFallbackTimeoutRef.current);
       }
