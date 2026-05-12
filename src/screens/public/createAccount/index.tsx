@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFormik } from 'formik';
 import { showMessage } from 'react-native-flash-message';
 import CountryPicker, { Country } from 'react-native-country-picker-modal';
-import parsePhoneNumber from 'libphonenumber-js';
+import parsePhoneNumberFromString from 'libphonenumber-js';
 
 import icons from '../../../assets/icons/icons';
 import { Theme } from '../../../common/theme';
@@ -63,9 +63,18 @@ const CreateAccount = ({ navigation }: CreateAccountProps) => {
     validationSchema: signupSchemaEnglish,
     validateOnMount: true,
     onSubmit: async (values, { resetForm }) => {
-      const formattedPhoneNo = parsePhoneNumber(
-        '+' + country.callingCode[0] + values.number,
-      )?.formatInternational();
+      const raw = values.number.replace(/\s+/g, '');
+      const cc = country.cca2 as Parameters<typeof parsePhoneNumberFromString>[1];
+      let parsed = parsePhoneNumberFromString(raw, cc);
+      if (!parsed?.isValid()) {
+        parsed = parsePhoneNumberFromString(
+          `+${country.callingCode[0]}${raw}`,
+          cc,
+        );
+      }
+
+      const formattedPhoneNo =
+        parsed?.isValid() === true ? parsed.formatInternational() : undefined;
 
       if (!formattedPhoneNo) {
         showMessage({

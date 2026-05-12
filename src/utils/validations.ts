@@ -3,9 +3,11 @@ import * as Yup from 'yup';
 export const signupSchemaEnglish = Yup.object().shape({
   fullName: Yup.string().required('Full name is required'),
   email: Yup.string().email('Invalid email').required('Email is required'),
+  // National number only (no country code). Length varies by country, e.g. France mobile is 9 digits after dropping a leading 0.
   number: Yup.string()
-    .matches(/^[0-9]{10,15}$/, 'Enter a valid phone number')
-    .required('Mobile number is required'),
+    .required('Mobile number is required')
+    .transform(v => (typeof v === 'string' ? v.replace(/\s+/g, '') : v))
+    .matches(/^[0-9]{6,15}$/, 'Enter a valid phone number'),
   password: Yup.string()
     .min(6, 'Password must be at least 6 characters')
     .required('Password is required'),
