@@ -1,10 +1,6 @@
 // navigation/DrawerNavigator.tsx
 import { createDrawerNavigator } from '@react-navigation/drawer';
-import {
-  CommonActions,
-  DrawerActions,
-  useNavigation,
-} from '@react-navigation/native';
+import { DrawerActions, useNavigation } from '@react-navigation/native';
 import React from 'react';
 import {
   Alert,
@@ -21,7 +17,7 @@ import { useSelector } from 'react-redux';
 import { RootState, store } from '../features/store';
 import { SubscriptionEntitlementSync } from '../features/subscription/SubscriptionEntitlementSync';
 import { useDeleteUserAccountMutation } from '../features/user/userApiSlice';
-import { clearUser } from '../features/user/userSlice';
+import { performLogout } from '../services/authSession';
 import PrivacyPolicy from '../screens/private/privacyPolicy';
 import PrivacyAiConsentScreen from '../screens/private/privacyAiConsent';
 import Settings from '../screens/private/settings';
@@ -47,17 +43,8 @@ const CustomDrawerContent = (props: any) => {
           onPress: async () => {
             try {
               await deleteUserAccount().unwrap();
-              store.dispatch({
-                type: 'LOGOUT',
-              });
-              navigation.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [{ name: 'Splash' }],
-                }),
-              );
               navigation.dispatch(DrawerActions.closeDrawer());
-              store.dispatch(clearUser());
+              performLogout();
             } catch (error) {
               Alert.alert(
                 'Error',
@@ -77,17 +64,8 @@ const CustomDrawerContent = (props: any) => {
         text: 'Logout',
         style: 'destructive',
         onPress: () => {
-          store.dispatch({
-            type: 'LOGOUT',
-          });
-          navigation.dispatch(
-            CommonActions.reset({
-              index: 0,
-              routes: [{ name: 'Splash' }],
-            }),
-          );
           navigation.dispatch(DrawerActions.closeDrawer());
-          store.dispatch(clearUser());
+          performLogout();
         },
       },
     ]);

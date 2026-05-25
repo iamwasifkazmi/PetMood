@@ -26,7 +26,7 @@ import { useLoginMutation } from '../../../features/auth/authApiSlice';
 import { loginSchema } from '../../../utils/validations';
 import { showErrMsg, showSuccessMsg } from '../../../utils/flashMessage';
 import { store } from '../../../features/store';
-import { setToken } from '../../../features/auth/authSlice';
+import { setAuthSession } from '../../../features/auth/authSlice';
 
 const Login = ({ navigation }: LoginProps) => {
   const { colors, fonts, spacing } = useTheme();
@@ -47,15 +47,27 @@ const Login = ({ navigation }: LoginProps) => {
       }).unwrap();
 
       const idToken = res?.idToken;
-      if (!idToken || typeof idToken !== 'string') {
-        console.error('Login response missing idToken', res);
+      const refreshToken = res?.refreshToken;
+      if (
+        !idToken ||
+        typeof idToken !== 'string' ||
+        !refreshToken ||
+        typeof refreshToken !== 'string'
+      ) {
+        console.error('Login response missing tokens', res);
         showErrMsg(
           'Could not complete sign-in (no token from server). Please try again.',
         );
         return;
       }
 
-      store.dispatch(setToken(idToken));
+      store.dispatch(
+        setAuthSession({
+          idToken,
+          refreshToken,
+          expiresIn: res.expiresIn || '3600',
+        }),
+      );
       resetForm();
       showSuccessMsg('Login successful!');
     } catch (err: any) {

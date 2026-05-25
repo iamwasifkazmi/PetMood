@@ -1,5 +1,6 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 import config from '../../common/config';
+import { FIREBASE_WEB_API_KEY } from '../../common/firebase';
 import axiosBaseQuery from '../axiosBaseQuery';
 import {
   ChangePasswordArg,
@@ -23,7 +24,7 @@ export const authApiSlice = createApi({
   endpoints: build => ({
     login: build.mutation<loginRes, loginArg>({
       query: arg => ({
-        url: `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=AIzaSyDn_8sMNiJO2h8i95jWT9fmVtUHHGGCHUE`,
+        url: `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`,
         data: arg,
         method: 'post',
       }),

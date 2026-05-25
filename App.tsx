@@ -10,6 +10,7 @@ import FlashMessage from 'react-native-flash-message';
 
 import { persistor, store } from './src/features/store';
 import { useTheme } from './src/hooks/useTheme';
+import { AuthSessionBootstrap } from './src/components/auth/AuthSessionBootstrap';
 import RootNavigator from './src/navigation'; // This should be your main navigator with auth logic
 import { navigationRef } from './services/navigationService';
 
@@ -37,10 +38,12 @@ const App = () => {
               </View>
             }
           >
-            <NavigationContainer theme={theme} ref={navigationRef}>
-              <RootNavigator />
-              <FlashMessage position="top" />
-            </NavigationContainer>
+            <AuthSessionBootstrap>
+              <NavigationContainer theme={theme} ref={navigationRef}>
+                <RootNavigator />
+                <FlashMessage position="top" />
+              </NavigationContainer>
+            </AuthSessionBootstrap>
           </PersistGate>
         </Provider>
       </SafeAreaProvider>
