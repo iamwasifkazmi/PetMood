@@ -6,7 +6,7 @@ This document describes all endpoints under ` /api/subscriptions/ ` and how to t
 
 Base URL examples:
 - Local dev: `http://127.0.0.1:8000/api/subscriptions/`
-- Render:   `https://pet-emotion-detection.onrender.com/api/subscriptions/`
+- Render:   `https://ai-pet-mood.onrender.com/api/subscriptions/`
 
 Most endpoints require a **Firebase-authenticated user** (via `Authorization: Bearer <id_token>`), except where noted.
 

@@ -29,7 +29,7 @@ Related app code:
 |------|--------|
 | Method | `POST` |
 | Path | `/api/subscriptions/verify-receipt` |
-| Full URL (production example) | `https://pet-emotion-detection.onrender.com/api/subscriptions/verify-receipt` |
+| Full URL (production example) | `https://ai-pet-mood.onrender.com/api/subscriptions/verify-receipt` |
 | Auth | `Authorization: Bearer <Firebase ID token>` (user must be logged in) |
 | Content-Type | `application/json` |
 

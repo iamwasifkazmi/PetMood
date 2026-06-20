@@ -27,7 +27,7 @@ import {
   useGetScanHistoryQuery,
   useScanPetMutation,
 } from '../../../features/scanning/scanningApiSlice';
-import { getStaticFeatureFlag } from 'react-native-worklets';
+import type { CreateScanRes } from '../../../features/scanning/types';
 import { useGetAllProfilesQuery } from '../../../features/pet/petApiSlice';
 import { showErrMsg } from '../../../utils/flashMessage';
 import AiConsentModal from '../../../components/modals/AiConsentModal';
@@ -72,6 +72,31 @@ const Scanner = () => {
 
   const [fetchAiConsent, aiConsentQuery] = useLazyGetAiConsentQuery();
   const [setAiConsent, setAiConsentState] = useSetAiConsentMutation();
+
+  const resetScanForRetake = () => {
+    setIsVoiceCreated(false);
+    setIsRecordingView(true);
+    setPetImage(null);
+    setAudioPath(null);
+    setScanResult({} as CreateScanRes);
+    setIsAnalyzingMedia(false);
+    setIsStartAudioRecording(false);
+    setIsStartVideoRecording(false);
+    bottomSheetRef.current?.close();
+  };
+
+  const getScanErrorDetail = (error: unknown): string => {
+    if (error && typeof error === 'object' && 'data' in error) {
+      const data = (error as { data?: unknown }).data;
+      if (typeof data === 'object' && data !== null && 'detail' in data) {
+        const detail = (data as { detail?: unknown }).detail;
+        if (typeof detail === 'string' && detail.trim()) {
+          return detail;
+        }
+      }
+    }
+    return 'No pet was detected in this photo. Please retake with your pet clearly visible.';
+  };
 
   const openConsent = async (provider?: string) => {
     setRequiredProvider((provider as AiProviderKey) || null);
@@ -150,6 +175,12 @@ const Scanner = () => {
       }
       if (error?.status === 429) {
         // Global handler already showed trial/daily limit + resetsAt
+        return;
+      }
+      if (error?.status === 422) {
+        Alert.alert('No pet detected', getScanErrorDetail(error), [
+          { text: 'Retake', onPress: resetScanForRetake },
+        ]);
         return;
       }
       Alert.alert(
@@ -360,10 +391,7 @@ const Scanner = () => {
               )}
               <EmotionDetectionResults
                 onSave={() => {}}
-                onRetake={() => {
-                  setIsVoiceCreated(false);
-                  setIsRecordingView(true);
-                }}
+                onRetake={resetScanForRetake}
                 petScanResult={scanResult}
                 capturedImageUri={petImage}
               />

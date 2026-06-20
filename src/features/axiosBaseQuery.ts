@@ -162,6 +162,11 @@ const axiosBaseQuery =
         responseData !== null &&
         typeof (responseData as { resetsAt?: string }).resetsAt === 'string';
 
+      const isNoPetDetected =
+        status === 422 &&
+        typeof responseData === 'object' &&
+        responseData !== null;
+
       if (!consentBlock) {
         if (isTrialScanLimit) {
           const d = responseData as {
@@ -184,7 +189,7 @@ const axiosBaseQuery =
           showErrMsg(
             `${head}${usage} You can try again after ${resetLabel} (server uses midnight UTC for the daily count).`,
           );
-        } else {
+        } else if (!isNoPetDetected) {
           showErrMsg(detail);
         }
       }

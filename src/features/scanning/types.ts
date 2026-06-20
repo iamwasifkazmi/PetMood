@@ -1,21 +1,24 @@
-interface CreateScanArg {
+export interface CreateScanArg {
   petId: string;
   mediaType: 'audio' | 'video' | 'image';
   file: any;
 }
 
-interface CreateScanRes {
+export interface CreateScanRes {
   emotion: string;
   confidence: number;
   mediaUrl: string;
   petId: string;
-  animalType: string;
-  analysisMethod: string;
+  /** Detected species/type from AI (e.g. dog, cat) */
+  animalType?: string;
+  /** How the scan was analyzed (e.g. image, audio) */
+  analysisMethod?: string;
+  /** Which AI provider ran detection */
+  aiDetectorType?: string;
   topEmotions: {
     emotion: string;
     confidence: number;
   }[];
-  aiDetectorType: string;
   pet?: {
     species?: string;
     name?: string;
@@ -35,6 +38,9 @@ export interface ScanHistoryRes {
   mediaUrl: string;
   timestamp: string;
   id: string;
+  animalType?: string;
+  analysisMethod?: string;
+  aiDetectorType?: string;
   pet: {
     species: string;
     name: string;
@@ -46,6 +52,7 @@ export interface ScanHistoryRes {
     photoUrl?: string;
   };
 }
+
 export interface DeletePetHistoryArg {
   id: string;
 }

@@ -1,7 +1,7 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 import config from '../../common/config';
 import axiosBaseQuery from '../axiosBaseQuery';
-import { DeletePetHistoryArg, ScanHistoryRes } from './types';
+import { DeletePetHistoryArg, CreateScanArg, CreateScanRes, ScanHistoryRes } from './types';
 
 export const scanningApiSlice = createApi({
   baseQuery: axiosBaseQuery({ baseUrl: config.api_base_url }),

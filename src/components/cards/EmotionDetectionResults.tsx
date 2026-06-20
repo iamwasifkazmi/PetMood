@@ -6,6 +6,7 @@ import icons from '../../assets/icons/icons';
 import PrimaryButton from '../buttons/PrimaryButton';
 import { useTheme } from '../../hooks/useTheme';
 import { getCondidenceValue } from '../../utils/getConfidencePercentage';
+import type { CreateScanRes } from '../../features/scanning/types';
 
 interface Props {
   containerStyle?: ViewStyle;
