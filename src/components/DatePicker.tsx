@@ -7,6 +7,7 @@ import {
   ImageSourcePropType,
   ImageStyle,
   Modal,
+  Platform,
   Pressable,
   StyleProp,
   StyleSheet,
@@ -170,6 +171,12 @@ const DatePicker: React.FC<DatePickerProps> = ({
     pickerContainer: {
       paddingHorizontal: 20,
       paddingVertical: 16,
+      backgroundColor: colors.card,
+      alignItems: 'center',
+    },
+    iosPicker: {
+      width: '100%',
+      height: 216,
     },
     buttonContainer: {
       paddingHorizontal: 20,
@@ -238,10 +245,19 @@ const DatePicker: React.FC<DatePickerProps> = ({
               <DateTimePicker
                 value={tempDate}
                 mode="date"
-                display="spinner"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 maximumDate={maximumDate}
                 minimumDate={minimumDate}
                 onChange={handleDateChange}
+                style={Platform.OS === 'ios' ? styles.iosPicker : undefined}
+                {...(Platform.OS === 'ios'
+                  ? {
+                      // Modal sheet is light; without this, iOS Dark Mode uses white
+                      // picker text on a white background (invisible on some devices).
+                      themeVariant: 'light' as const,
+                      textColor: colors.text,
+                    }
+                  : {})}
               />
             </View>
 
