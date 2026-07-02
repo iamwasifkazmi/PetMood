@@ -46,6 +46,11 @@ const EmotionDetectionResults = ({
     return images.pet_detail;
   };
   
+  const recommendedText =
+    typeof petScanResult?.recommended === 'string'
+      ? petScanResult.recommended.trim()
+      : '';
+
   return (
     <View style={[containerStyle, { gap: 24 }]}>
       <Image
@@ -86,13 +91,11 @@ const EmotionDetectionResults = ({
             categoryValue: getCondidenceValue(petScanResult?.confidence),
             icon: icons.pin_up,
           },
-
-          ...(petScanResult?.breed
+          ...(recommendedText
             ? [
                 {
-                  label: 'Pet Breed',
-                  categoryValue:
-                    'Your pet sounds happy and content. Great job! That cheerful bark says your pet is in a good mood!',
+                  label: 'Recommended',
+                  categoryValue: recommendedText,
                   icon: icons.bulb,
                   suggestions: true,
                 },

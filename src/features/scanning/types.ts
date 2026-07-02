@@ -15,6 +15,8 @@ export interface CreateScanRes {
   analysisMethod?: string;
   /** Which AI provider ran detection */
   aiDetectorType?: string;
+  /** Optional care / action tip from the API */
+  recommended?: string;
   topEmotions: {
     emotion: string;
     confidence: number;
@@ -41,6 +43,7 @@ export interface ScanHistoryRes {
   animalType?: string;
   analysisMethod?: string;
   aiDetectorType?: string;
+  recommended?: string;
   pet: {
     species: string;
     name: string;
