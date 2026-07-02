@@ -32,7 +32,7 @@ export type StackParamList = {
   Login: undefined;
   ResetPassword: undefined;
   CreateNewPassword: { phoneNumber: string };
-  Profile: undefined;
+  Profile: { openAddForm?: boolean } | undefined;
   Scanner: undefined;
   History: undefined;
   Community: undefined;

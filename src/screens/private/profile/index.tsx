@@ -1,5 +1,5 @@
 import moment from 'moment';
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Image,
   Pressable,
@@ -29,9 +29,9 @@ import {
   WarningImage,
 } from '../../../components/views/SuccessImage';
 import {
-  BREED_OPTIONS,
   GENDER_OPTIONS,
   SPECIES_OPTIONS,
+  getBreedOptionsForSpecies,
 } from '../../../constants/petOptions';
 import {
   useCreatePetMutation,
@@ -44,10 +44,12 @@ import {
   requestCameraPermission,
   requestGalleryPermission,
 } from '../../../services/permission';
+import { useFocusEffect } from '@react-navigation/native';
 import { formatDate } from '../../../utils/formatTime';
 import PetDetails from './PetDetails';
+import { ProfileProps } from '../../../navigation/types';
 
-const Profile = () => {
+const Profile = ({ route, navigation }: ProfileProps) => {
   const { colors, spacing } = useTheme();
   const styles = useStyles(colors, spacing);
 
@@ -74,6 +76,16 @@ const Profile = () => {
     useUpdatePetProfileMutation();
   const [deletePetProfile, { isLoading: isDeleting }] =
     useDeletePetProfileMutation();
+
+  const breedOptions = useMemo(
+    () => getBreedOptionsForSpecies(selectedSpecies, selectedBreed),
+    [selectedSpecies, selectedBreed],
+  );
+
+  const handleSpeciesChange = (value: string | number) => {
+    setSelectedSpecies(value);
+    setSelectedBreed('');
+  };
 
   const handleOkay = () => {
     bottomSheetRef?.current?.close();
@@ -103,6 +115,28 @@ const Profile = () => {
     setPetImage(null);
     setIsProfileCreated(false);
   };
+
+  const openAddPetForm = useCallback(() => {
+    setPetName('');
+    setSelectedGender('');
+    setSelectedSpecies('');
+    setSelectedBreed('');
+    setDob(null);
+    setPetImage(null);
+    setShowPetDetails(false);
+    setIsDeleteConfirmVisible(false);
+    setIsEdit(false);
+    setIsProfileCreated(true);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (route.params?.openAddForm) {
+        openAddPetForm();
+        navigation.setParams({ openAddForm: undefined });
+      }
+    }, [route.params?.openAddForm, navigation, openAddPetForm]),
+  );
 
   const handleCreateProfile = async () => {
     // if (!isProfileCreated) {
@@ -292,7 +326,7 @@ const Profile = () => {
             <Dropdown
               options={SPECIES_OPTIONS}
               selectedValue={selectedSpecies}
-              onValueChange={setSelectedSpecies}
+              onValueChange={handleSpeciesChange}
               placeholder="Select Pet Species"
               containerStyle={styles.dropdownContainer}
               leftIcon={icons.paw}
@@ -300,10 +334,14 @@ const Profile = () => {
             />
 
             <Dropdown
-              options={BREED_OPTIONS}
+              options={breedOptions}
               selectedValue={selectedBreed}
               onValueChange={setSelectedBreed}
-              placeholder="Select Pet Breed"
+              placeholder={
+                selectedSpecies ? 'Select Pet Breed' : 'Select species first'
+              }
+              searchable
+              searchPlaceholder="Search breeds..."
               containerStyle={styles.dropdownContainer}
               leftIcon={icons.paw}
               leftIconStyle={{ tintColor: colors.primary }}
@@ -360,11 +398,7 @@ const Profile = () => {
               autoCapitalize="none"
             />
             <PrimaryButton
-              onPress={() => {
-                setIsProfileCreated(true), setIsDeleteConfirmVisible(false);
-                setIsEdit(false);
-                // resetForm();
-              }}
+              onPress={openAddPetForm}
               type="outlined"
               title="Add New Pet Profile"
               style={{ backgroundColor: colors.card, marginVertical: 24 }}

@@ -1,5 +1,5 @@
 import moment from 'moment';
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Image,
   Pressable,
@@ -29,9 +29,9 @@ import {
   WarningImage,
 } from '../../../components/views/SuccessImage';
 import {
-  BREED_OPTIONS,
   GENDER_OPTIONS,
   SPECIES_OPTIONS,
+  getBreedOptionsForSpecies,
 } from '../../../constants/petOptions';
 import {
   useCreatePetMutation,
@@ -86,6 +86,16 @@ const Home = ({ navigation }: HomeProps) => {
     useUpdatePetProfileMutation();
   const [deletePetProfile, { isLoading: isDeleting }] =
     useDeletePetProfileMutation();
+
+  const breedOptions = useMemo(
+    () => getBreedOptionsForSpecies(selectedSpecies, selectedBreed),
+    [selectedSpecies, selectedBreed],
+  );
+
+  const handleSpeciesChange = (value: string | number) => {
+    setSelectedSpecies(String(value));
+    setSelectedBreed('');
+  };
 
   const handleOkay = () => {
     bottomSheetRef?.current?.close();
@@ -340,7 +350,7 @@ const Home = ({ navigation }: HomeProps) => {
             <Dropdown
               options={SPECIES_OPTIONS}
               selectedValue={selectedSpecies}
-              onValueChange={value => setSelectedSpecies(String(value))}
+              onValueChange={handleSpeciesChange}
               placeholder="Select Pet Species"
               containerStyle={styles.dropdownContainer}
               leftIcon={icons.paw}
@@ -348,10 +358,14 @@ const Home = ({ navigation }: HomeProps) => {
             />
 
             <Dropdown
-              options={BREED_OPTIONS}
+              options={breedOptions}
               selectedValue={selectedBreed}
               onValueChange={value => setSelectedBreed(String(value))}
-              placeholder="Select Pet Breed"
+              placeholder={
+                selectedSpecies ? 'Select Pet Breed' : 'Select species first'
+              }
+              searchable
+              searchPlaceholder="Search breeds..."
               containerStyle={styles.dropdownContainer}
               leftIcon={icons.paw}
               leftIconStyle={{ tintColor: colors.primary }}
@@ -394,7 +408,7 @@ const Home = ({ navigation }: HomeProps) => {
           <>
             <PrimaryButton
               onPress={() => {
-                navigation.navigate(RouteName.Profile);
+                navigation.navigate(RouteName.Profile, { openAddForm: true });
               }}
               type="outlined"
               title="Add New Pet Profile"

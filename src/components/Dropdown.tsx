@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
@@ -8,6 +8,7 @@ import {
   StyleProp,
   StyleSheet,
   Text,
+  TextInput,
   TextStyle,
   TouchableOpacity,
   View,
@@ -42,6 +43,9 @@ interface DropdownProps {
   leftIconStyle?: StyleProp<ImageStyle>;
   itemTextStyle?: StyleProp<TextStyle>;
   maxHeight?: number;
+  /** Show a search field to filter options by label (useful for long lists). */
+  searchable?: boolean;
+  searchPlaceholder?: string;
 }
 
 const Dropdown: React.FC<DropdownProps> = ({
@@ -58,9 +62,12 @@ const Dropdown: React.FC<DropdownProps> = ({
   leftIconStyle,
   itemTextStyle,
   maxHeight = 300,
+  searchable = false,
+  searchPlaceholder = 'Search...',
 }) => {
   const { colors, fonts } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const rotation = useSharedValue(0);
   const scale = useSharedValue(1);
   const opacity = useSharedValue(0);
@@ -78,6 +85,7 @@ const Dropdown: React.FC<DropdownProps> = ({
   }));
 
   const handleOpen = () => {
+    setSearchQuery('');
     setIsOpen(true);
     rotation.value = withTiming(180, { duration: 200 });
     scale.value = withTiming(1.1, { duration: 150 });
@@ -85,6 +93,7 @@ const Dropdown: React.FC<DropdownProps> = ({
   };
 
   const handleClose = () => {
+    setSearchQuery('');
     rotation.value = withTiming(0, { duration: 200 });
     scale.value = withTiming(1, { duration: 150 });
     opacity.value = withTiming(0, { duration: 150 }, () => {
@@ -96,6 +105,14 @@ const Dropdown: React.FC<DropdownProps> = ({
     onValueChange(value);
     handleClose();
   };
+
+  const filteredOptions = useMemo(() => {
+    if (!searchable || !searchQuery.trim()) {
+      return options;
+    }
+    const q = searchQuery.trim().toLowerCase();
+    return options.filter(opt => opt.label.toLowerCase().includes(q));
+  }, [options, searchable, searchQuery]);
 
   const styles = StyleSheet.create({
     container: {
@@ -164,6 +181,27 @@ const Dropdown: React.FC<DropdownProps> = ({
     },
     closeButton: {
       padding: 4,
+    },
+    searchContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginHorizontal: 20,
+      marginTop: 12,
+      marginBottom: 4,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      borderRadius: 8,
+      backgroundColor: colors.background,
+      gap: 8,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 15,
+      color: colors.text,
+      padding: 0,
+      ...fonts.regular,
     },
     optionsList: {
       flexGrow: 0,
@@ -266,9 +304,26 @@ const Dropdown: React.FC<DropdownProps> = ({
               </TouchableOpacity>
             </View>
 
+            {searchable && (
+              <View style={styles.searchContainer}>
+                <Feather name="search" size={18} color={colors.placeholder} />
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder={searchPlaceholder}
+                  placeholderTextColor={colors.placeholder}
+                  style={styles.searchInput}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  clearButtonMode="while-editing"
+                />
+              </View>
+            )}
+
             <FlatList
-              data={options}
+              data={filteredOptions}
               keyExtractor={item => item.value.toString()}
+              keyboardShouldPersistTaps="handled"
               renderItem={({ item }) => {
                 const isSelected = item.value === selectedValue;
                 return (
@@ -301,7 +356,11 @@ const Dropdown: React.FC<DropdownProps> = ({
               contentContainerStyle={{ paddingBottom: 20 }}
               ListEmptyComponent={
                 <View style={styles.emptyOptions}>
-                  <Text style={styles.emptyText}>No options available</Text>
+                  <Text style={styles.emptyText}>
+                    {searchQuery.trim()
+                      ? 'No matching breeds'
+                      : 'No options available'}
+                  </Text>
                 </View>
               }
             />
