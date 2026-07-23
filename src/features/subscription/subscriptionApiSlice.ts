@@ -1,11 +1,13 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 import config from '../../common/config';
 import axiosBaseQuery from '../axiosBaseQuery';
+import { mapQuotasFromBackend } from '../../utils/subscriptionQuotas';
 import {
   PlansResponse,
   CancelSubscriptionResponse,
   RestorePurchasesResponse,
   SubscriptionStatus,
+  SubscriptionStatusResponse,
   VerifyReceiptRequest,
   VerifyReceiptResponse,
 } from './types';
@@ -37,8 +39,7 @@ function mapStatusFromBackend(
     backendStatus,
     accessActive:
       typeof meta?.access_active === 'boolean' ? meta.access_active : null,
-    accessReason:
-      typeof meta?.reason === 'string' ? meta.reason : null,
+    accessReason: typeof meta?.reason === 'string' ? meta.reason : null,
   };
 }
 
@@ -77,26 +78,30 @@ export const subscriptionApiSlice = createApi({
     }),
 
     /**
-     * Get current subscription status
-     * Backend returns snake_case, we convert to camelCase
+     * Get current subscription status + quotas (backend source of truth)
      */
-    getSubscriptionStatus: build.query<
-      { subscription: SubscriptionStatus | null },
-      void
-    >({
+    getSubscriptionStatus: build.query<SubscriptionStatusResponse, void>({
       query: () => ({
         url: 'subscriptions/status',
         method: 'get',
       }),
       transformResponse: (response: {
         subscription: any | null;
+        quotas?: Record<string, any>;
         access_active?: boolean;
         reason?: string | null;
-      }) => ({
+      }): SubscriptionStatusResponse => ({
         subscription: mapStatusFromBackend(response.subscription, {
           access_active: response.access_active,
           reason: response.reason,
         }),
+        quotas: mapQuotasFromBackend(response.quotas),
+        accessActive:
+          typeof response.access_active === 'boolean'
+            ? response.access_active
+            : null,
+        accessReason:
+          typeof response.reason === 'string' ? response.reason : null,
       }),
       providesTags: ['Subscription'],
     }),
@@ -110,14 +115,16 @@ export const subscriptionApiSlice = createApi({
         method: 'post',
         data: {},
       }),
-      transformResponse: (response: { subscriptions?: any[] }) => {
-        if (!response.subscriptions?.length) {
-          return { subscriptions: [] };
-        }
+      transformResponse: (response: {
+        subscriptions?: any[];
+        quotas?: Record<string, any>;
+      }): RestorePurchasesResponse => {
+        const subscriptions = (response.subscriptions || [])
+          .map((sub: any) => mapStatusFromBackend(sub))
+          .filter((s): s is SubscriptionStatus => s != null);
         return {
-          subscriptions: response.subscriptions
-            .map((sub: any) => mapStatusFromBackend(sub))
-            .filter((s): s is SubscriptionStatus => s != null),
+          subscriptions,
+          quotas: mapQuotasFromBackend(response.quotas),
         };
       },
       invalidatesTags: ['Subscription'],

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import AntDesign from 'react-native-vector-icons/AntDesign';
 import ImagePicker from 'react-native-image-crop-picker';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Theme } from '../../../common/theme';
 import { useTheme } from '../../../hooks/useTheme';
 import Header from '../../../components/header/Header';
@@ -36,14 +37,24 @@ import {
   useSetAiConsentMutation,
 } from '../../../features/privacy/privacyApiSlice';
 import { AiProviderKey } from '../../../features/privacy/types';
+import { useSubscription } from '../../../hooks/useSubscription';
+import {
+  formatResetsAt,
+  getApiErrorCode,
+  getApiErrorDetail,
+  scansLeftLabel,
+} from '../../../utils/subscriptionQuotas';
+import { navigateToSubscription } from '../../../utils/navigateToSubscription';
 
 const Scanner = () => {
   const { colors, spacing } = useTheme();
   const styles = useStyles(colors, spacing);
+  const navigation = useNavigation();
+  const { quotas, canScan, requiresSubscription, refetchStatus } =
+    useSubscription();
 
   // 🧩 RTK Query Mutation
-  const [createScan, { isLoading: isUploading, error: createScanError }] =
-    useScanPetMutation();
+  const [createScan, { isLoading: isUploading }] = useScanPetMutation();
 
   // State
   const [isRecordingView, setIsRecordingView] = useState(false);
@@ -53,8 +64,7 @@ const Scanner = () => {
   const [isAnalyzingMedia, setIsAnalyzingMedia] = useState(false);
   const [petImage, setPetImage] = useState<string | null>(null);
   const [audioPath, setAudioPath] = useState<string | null>(null);
-  const [audioDuration, setAudioDuration] = useState<number>(0);
-  const { data: scanHistory, error } = useGetScanHistoryQuery();
+  const { data: scanHistory } = useGetScanHistoryQuery();
   const bottomSheetRef = useRef<GlobalBottomSheetRef>(null);
   const { data, refetch, isFetching } = useGetAllProfilesQuery();
   const [selectedPet, setSelectedPet] = useState<string>('');
@@ -64,7 +74,9 @@ const Scanner = () => {
 
   // AI consent state
   const [consentVisible, setConsentVisible] = useState(false);
-  const [requiredProvider, setRequiredProvider] = useState<AiProviderKey | null>(null);
+  const [requiredProvider, setRequiredProvider] = useState<AiProviderKey | null>(
+    null,
+  );
   const [pendingRetry, setPendingRetry] = useState<{
     fileUri: string;
     mediaType: 'audio' | 'video' | 'image';
@@ -72,6 +84,25 @@ const Scanner = () => {
 
   const [fetchAiConsent, aiConsentQuery] = useLazyGetAiConsentQuery();
   const [setAiConsent, setAiConsentState] = useSetAiConsentMutation();
+
+  useFocusEffect(
+    useCallback(() => {
+      void refetchStatus();
+    }, [refetchStatus]),
+  );
+
+  const openPaywall = useCallback(
+    (message: string) => {
+      Alert.alert('Subscription required', message, [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Subscribe',
+          onPress: () => navigateToSubscription(navigation as any),
+        },
+      ]);
+    },
+    [navigation],
+  );
 
   const resetScanForRetake = () => {
     setIsVoiceCreated(false);
@@ -86,16 +117,10 @@ const Scanner = () => {
   };
 
   const getScanErrorDetail = (error: unknown): string => {
-    if (error && typeof error === 'object' && 'data' in error) {
-      const data = (error as { data?: unknown }).data;
-      if (typeof data === 'object' && data !== null && 'detail' in data) {
-        const detail = (data as { detail?: unknown }).detail;
-        if (typeof detail === 'string' && detail.trim()) {
-          return detail;
-        }
-      }
-    }
-    return 'No pet was detected in this photo. Please retake with your pet clearly visible.';
+    return (
+      getApiErrorDetail(error) ||
+      'No pet was detected in this photo. Please retake with your pet clearly visible.'
+    );
   };
 
   const openConsent = async (provider?: string) => {
@@ -164,17 +189,50 @@ const Scanner = () => {
       }).unwrap();
       setScanResult(response);
       console.log('✅ Scan uploaded successfully:', response);
+      void refetchStatus();
     } catch (error: any) {
       console.log('❌ Upload failed:', error);
-      if (error?.status === 403) {
-        const data = error?.data || {};
-        const provider = data?.requiredProvider as string | undefined;
+      const code = getApiErrorCode(error);
+      const detail = getApiErrorDetail(error);
+
+      if (error?.status === 403 && code === 'subscription_required') {
+        openPaywall(
+          detail ||
+            'You do not have an active subscription. Please subscribe to scan your pet’s emotions.',
+        );
+        return;
+      }
+
+      if (error?.status === 403 && error?.data?.requiredProvider) {
+        const provider = error?.data?.requiredProvider as string | undefined;
         setPendingRetry({ fileUri, mediaType });
         await openConsent(provider);
         return;
       }
+
+      if (error?.status === 403) {
+        // Unknown 403 with consent-like body without code — keep prior consent flow
+        const provider = error?.data?.requiredProvider as string | undefined;
+        if (
+          provider ||
+          String(detail || '')
+            .toLowerCase()
+            .includes('consent')
+        ) {
+          setPendingRetry({ fileUri, mediaType });
+          await openConsent(provider);
+          return;
+        }
+        openPaywall(
+          detail ||
+            'You need an active subscription to scan. Please subscribe to continue.',
+        );
+        return;
+      }
+
       if (error?.status === 429) {
-        // Global handler already showed trial/daily limit + resetsAt
+        // Global flash already showed daily limit + resetsAt
+        void refetchStatus();
         return;
       }
       if (error?.status === 422) {
@@ -185,7 +243,7 @@ const Scanner = () => {
       }
       Alert.alert(
         'Upload Failed',
-        'Unable to upload the scan. Please try again.',
+        detail || 'Unable to upload the scan. Please try again.',
       );
     }
   };
@@ -212,6 +270,27 @@ const Scanner = () => {
       showErrMsg('Please select a pet to upload the scan.');
       return;
     }
+
+    if (!canScan) {
+      if (requiresSubscription || quotas?.scansAllowed === false) {
+        openPaywall(
+          'You do not have an active subscription. Please subscribe to scan your pet’s emotions.',
+        );
+        return;
+      }
+      if (quotas?.scansRemainingToday === 0) {
+        Alert.alert(
+          'Daily scan limit reached',
+          `You’ve used all scans for today. Try again after ${formatResetsAt(
+            quotas.resetsAt,
+          )}.`,
+        );
+        return;
+      }
+      showErrMsg('Scanning is not available right now.');
+      return;
+    }
+
     // Show consent before the user starts any scan flow
     (async () => {
       try {
@@ -410,16 +489,40 @@ const Scanner = () => {
       )}
 
       {!isRecordingView && !isVoiceCreated && (
-        <PrimaryButton
-          onPress={handleShowRecording}
-          title="Start Scan"
+        <View
           style={{
-            width: '90%',
             position: 'absolute',
             bottom: 20,
+            left: '5%',
+            right: '5%',
+            width: '90%',
             alignSelf: 'center',
           }}
-        />
+        >
+          {scansLeftLabel(quotas) ? (
+            <AppText
+              size={13}
+              color={colors.caption}
+              style={{ textAlign: 'center', marginBottom: 8 }}
+            >
+              {scansLeftLabel(quotas)}
+              {quotas?.scansRemainingToday === 0 && quotas?.resetsAt
+                ? ` · Resets ${formatResetsAt(quotas.resetsAt)}`
+                : ''}
+            </AppText>
+          ) : null}
+          <PrimaryButton
+            onPress={handleShowRecording}
+            title={
+              requiresSubscription || quotas?.scansAllowed === false
+                ? 'Subscribe to Scan'
+                : quotas?.scansRemainingToday === 0
+                  ? 'Daily Limit Reached'
+                  : 'Start Scan'
+            }
+            disabled={isUploading}
+          />
+        </View>
       )}
 
       {/* 🔹 Bottom Sheet */}

@@ -1,6 +1,7 @@
 import moment from 'moment';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Image,
   Pressable,
   StyleSheet,
@@ -9,6 +10,7 @@ import {
 } from 'react-native';
 import { showMessage } from 'react-native-flash-message';
 import ImagePicker from 'react-native-image-crop-picker';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AntDesign from 'react-native-vector-icons/AntDesign';
 import icons from '../../../assets/icons/icons';
@@ -40,18 +42,25 @@ import {
   useUpdatePetProfileMutation,
 } from '../../../features/pet/petApiSlice';
 import { useTheme } from '../../../hooks/useTheme';
+import { useSubscription } from '../../../hooks/useSubscription';
 import {
   requestCameraPermission,
   requestGalleryPermission,
 } from '../../../services/permission';
-import { useFocusEffect } from '@react-navigation/native';
 import { formatDate } from '../../../utils/formatTime';
+import {
+  getApiErrorCode,
+  getApiErrorDetail,
+  profilesUsageLabel,
+} from '../../../utils/subscriptionQuotas';
+import { navigateToSubscription } from '../../../utils/navigateToSubscription';
 import PetDetails from './PetDetails';
 import { ProfileProps } from '../../../navigation/types';
 
 const Profile = ({ route, navigation }: ProfileProps) => {
   const { colors, spacing } = useTheme();
   const styles = useStyles(colors, spacing);
+  const { quotas, canAddPet, refetchStatus } = useSubscription();
 
   const [selectedGender, setSelectedGender] = useState<string | number>('');
   const [selectedSpecies, setSelectedSpecies] = useState<string | number>('');
@@ -117,6 +126,20 @@ const Profile = ({ route, navigation }: ProfileProps) => {
   };
 
   const openAddPetForm = useCallback(() => {
+    if (!canAddPet) {
+      const detail =
+        quotas?.tier === 'none'
+          ? 'You can only create one pet profile without a subscription. Please subscribe to add more profiles.'
+          : 'Profile limit reached for your subscription. Please upgrade to add more pets.';
+      Alert.alert('Profile limit', detail, [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Subscribe',
+          onPress: () => navigateToSubscription(navigation as any),
+        },
+      ]);
+      return;
+    }
     setPetName('');
     setSelectedGender('');
     setSelectedSpecies('');
@@ -127,15 +150,16 @@ const Profile = ({ route, navigation }: ProfileProps) => {
     setIsDeleteConfirmVisible(false);
     setIsEdit(false);
     setIsProfileCreated(true);
-  }, []);
+  }, [canAddPet, quotas?.tier, navigation]);
 
   useFocusEffect(
     useCallback(() => {
+      void refetchStatus();
       if (route.params?.openAddForm) {
         openAddPetForm();
         navigation.setParams({ openAddForm: undefined });
       }
-    }, [route.params?.openAddForm, navigation, openAddPetForm]),
+    }, [route.params?.openAddForm, navigation, openAddPetForm, refetchStatus]),
   );
 
   const handleCreateProfile = async () => {
@@ -214,13 +238,31 @@ const Profile = ({ route, navigation }: ProfileProps) => {
         console.log('callled');
         bottomSheetRef?.current?.expand();
         resetForm();
+        void refetchStatus();
       }
     } catch (err: any) {
+      const code = getApiErrorCode(err);
+      const detail = getApiErrorDetail(err);
+      if (err?.status === 403 && code === 'profile_limit_reached') {
+        Alert.alert(
+          'Profile limit',
+          detail ||
+            'Profile limit reached for your subscription. Please subscribe to add more pets.',
+          [
+            { text: 'Not now', style: 'cancel' },
+            {
+              text: 'Subscribe',
+              onPress: () => navigateToSubscription(navigation as any),
+            },
+          ],
+        );
+        return;
+      }
       showMessage({
         message: isEdit
           ? 'Failed to update pet profile'
           : 'Failed to create pet profile',
-        description: err?.data?.message || 'Please try again',
+        description: detail || err?.data?.message || 'Please try again',
         type: 'danger',
       });
     } finally {
@@ -400,9 +442,25 @@ const Profile = ({ route, navigation }: ProfileProps) => {
             <PrimaryButton
               onPress={openAddPetForm}
               type="outlined"
-              title="Add New Pet Profile"
+              title={
+                canAddPet
+                  ? 'Add New Pet Profile'
+                  : 'Subscribe to Add More Pets'
+              }
               style={{ backgroundColor: colors.card, marginVertical: 24 }}
             />
+            {profilesUsageLabel(quotas) ? (
+              <AppText
+                size={13}
+                color={colors.caption}
+                style={{ textAlign: 'center', marginBottom: 12 }}
+              >
+                {profilesUsageLabel(quotas)}
+                {quotas?.profilesRemaining != null
+                  ? ` · ${quotas.profilesRemaining} remaining`
+                  : ''}
+              </AppText>
+            ) : null}
             <PetListCard
               onPressItem={() => {
                 setShowPetDetails(true);

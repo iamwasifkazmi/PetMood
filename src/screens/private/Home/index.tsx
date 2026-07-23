@@ -1,6 +1,7 @@
 import moment from 'moment';
 import React, { useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Image,
   Pressable,
   StyleSheet,
@@ -40,6 +41,7 @@ import {
   useUpdatePetProfileMutation,
 } from '../../../features/pet/petApiSlice';
 import { useTheme } from '../../../hooks/useTheme';
+import { useSubscription } from '../../../hooks/useSubscription';
 import { HomeProps, RouteName } from '../../../navigation/types';
 import {
   requestCameraPermission,
@@ -51,10 +53,17 @@ import { useGetUserDataQuery } from '../../../features/user/userApiSlice';
 import { useDispatch } from 'react-redux';
 import { setUser } from '../../../features/user/userSlice';
 import PetDetails from '../profile/PetDetails';
+import {
+  getApiErrorCode,
+  getApiErrorDetail,
+  profilesUsageLabel,
+} from '../../../utils/subscriptionQuotas';
+import { navigateToSubscription } from '../../../utils/navigateToSubscription';
 
 const Home = ({ navigation }: HomeProps) => {
   const { colors, spacing } = useTheme();
   const styles = useStyles(colors, spacing);
+  const { quotas, canAddPet, refetchStatus } = useSubscription();
 
   const [selectedGender, setSelectedGender] = useState<string>('');
   const [selectedSpecies, setSelectedSpecies] = useState<string>('');
@@ -180,6 +189,20 @@ const Home = ({ navigation }: HomeProps) => {
   // ✅ Create/Update Pet API call
   const handleCreateProfile = async () => {
     if (!isProfileCreated) {
+      if (!canAddPet) {
+        const detail =
+          quotas?.tier === 'none'
+            ? 'You can only create one pet profile without a subscription. Please subscribe to add more profiles.'
+            : 'Profile limit reached for your subscription. Please upgrade to add more pets.';
+        Alert.alert('Profile limit', detail, [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Subscribe',
+            onPress: () => navigateToSubscription(navigation as any),
+          },
+        ]);
+        return;
+      }
       setIsProfileCreated(true);
       return;
     }
@@ -254,14 +277,32 @@ const Home = ({ navigation }: HomeProps) => {
         bottomSheetRef?.current?.expand();
         resetForm();
         refetch(); // Refresh the list
+        void refetchStatus();
       }
     } catch (err: any) {
       console.log('❌ Failed to create/update pet profile:', err);
+      const code = getApiErrorCode(err);
+      const detail = getApiErrorDetail(err);
+      if (err?.status === 403 && code === 'profile_limit_reached') {
+        Alert.alert(
+          'Profile limit',
+          detail ||
+            'Profile limit reached for your subscription. Please subscribe to add more pets.',
+          [
+            { text: 'Not now', style: 'cancel' },
+            {
+              text: 'Subscribe',
+              onPress: () => navigateToSubscription(navigation as any),
+            },
+          ],
+        );
+        return;
+      }
       showMessage({
         message: isEdit
           ? 'Failed to update pet profile'
           : 'Failed to create pet profile',
-        description: err?.data?.message || 'Please try again',
+        description: detail || err?.data?.message || 'Please try again',
         type: 'danger',
       });
     }
@@ -408,12 +449,42 @@ const Home = ({ navigation }: HomeProps) => {
           <>
             <PrimaryButton
               onPress={() => {
+                if (!canAddPet) {
+                  const detail =
+                    quotas?.tier === 'none'
+                      ? 'You can only create one pet profile without a subscription. Please subscribe to add more profiles.'
+                      : 'Profile limit reached for your subscription. Please upgrade to add more pets.';
+                  Alert.alert('Profile limit', detail, [
+                    { text: 'Not now', style: 'cancel' },
+                    {
+                      text: 'Subscribe',
+                      onPress: () => navigateToSubscription(navigation as any),
+                    },
+                  ]);
+                  return;
+                }
                 navigation.navigate(RouteName.Profile, { openAddForm: true });
               }}
               type="outlined"
-              title="Add New Pet Profile"
+              title={
+                canAddPet
+                  ? 'Add New Pet Profile'
+                  : 'Subscribe to Add More Pets'
+              }
               style={{ backgroundColor: colors.card, marginVertical: 24 }}
             />
+            {profilesUsageLabel(quotas) ? (
+              <AppText
+                size={13}
+                color={colors.caption}
+                style={{ textAlign: 'center', marginBottom: 8 }}
+              >
+                {profilesUsageLabel(quotas)}
+                {quotas?.profilesRemaining != null
+                  ? ` · ${quotas.profilesRemaining} remaining`
+                  : ''}
+              </AppText>
+            ) : null}
             
             {/* Search Input */}
             <PrimaryInput

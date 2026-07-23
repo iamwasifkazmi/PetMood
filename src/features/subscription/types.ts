@@ -2,6 +2,26 @@
  * Subscription Types
  */
 
+export type SubscriptionTier = 'none' | 'trial' | 'family' | 'premium';
+
+/** Backend-enforced limits from GET /api/subscriptions/status */
+export interface SubscriptionQuotas {
+  tier: SubscriptionTier;
+  /** Cap on pet profiles; null = unlimited */
+  maxProfiles: number | null;
+  profilesUsed: number;
+  /** Remaining profiles that can be created; 0 = at cap */
+  profilesRemaining: number | null;
+  scansAllowed: boolean;
+  scansPerDay: number;
+  scansUsedToday: number;
+  /** Remaining scans today; null = unlimited */
+  scansRemainingToday: number | null;
+  requiresSubscription: boolean;
+  /** When daily scan counter resets (UTC midnight ISO) */
+  resetsAt: string | null;
+}
+
 export interface SubscriptionStatus {
   isActive: boolean;
   planType: 'premium' | 'family' | null;
@@ -14,11 +34,18 @@ export interface SubscriptionStatus {
   trialDays: number | null;
   /** Remaining full trial days, derived by backend from expires_at */
   trialDaysLeft: number | null;
-  /** Maps API `subscription.status`, e.g. active, expired, canceled */
+  /** Maps API `subscription.status`, e.g. active, expired, canceled, trialing */
   backendStatus: string | null;
   /** Top-level `access_active` from GET /subscriptions/status */
   accessActive?: boolean | null;
   /** Top-level `reason`, e.g. expired_or_not_renewed */
+  accessReason?: string | null;
+}
+
+export interface SubscriptionStatusResponse {
+  subscription: SubscriptionStatus | null;
+  quotas: SubscriptionQuotas;
+  accessActive?: boolean | null;
   accessReason?: string | null;
 }
 
@@ -71,6 +98,11 @@ export interface VerifyReceiptResponse {
   message?: string;
 }
 
+export interface PlanLimitTier {
+  maxProfiles: number | null;
+  scansPerDay: number | null;
+}
+
 export interface SubscriptionPlan {
   product_id: string;
   name: string;
@@ -78,6 +110,14 @@ export interface SubscriptionPlan {
   period: 'monthly' | 'annual';
   platform: 'apple';
   price_display: string;
+  trial_offer?: {
+    enabled?: boolean;
+    days?: number;
+  };
+  limits?: {
+    paid?: PlanLimitTier;
+    trial?: PlanLimitTier;
+  };
 }
 
 export interface PlansResponse {
@@ -86,6 +126,7 @@ export interface PlansResponse {
 
 export interface RestorePurchasesResponse {
   subscriptions: SubscriptionStatus[];
+  quotas?: SubscriptionQuotas;
 }
 
 /** POST /api/subscriptions/cancel */
@@ -96,3 +137,8 @@ export interface CancelSubscriptionResponse {
   message?: string;
   manageSubscriptionUrl: string;
 }
+
+/** Backend error `code` values for quota / paywall routing */
+export type SubscriptionErrorCode =
+  | 'subscription_required'
+  | 'profile_limit_reached';

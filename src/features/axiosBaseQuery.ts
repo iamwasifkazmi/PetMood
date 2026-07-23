@@ -4,6 +4,7 @@ import axios from 'axios';
 import { showErrMsg } from '../utils/flashMessage';
 import { getValidIdToken } from '../services/firebaseTokenService';
 import { performLogout } from '../services/authSession';
+import { isQuotaOrPaywallError } from '../utils/subscriptionQuotas';
 
 const axiosBaseQuery =
   (
@@ -65,15 +66,21 @@ const axiosBaseQuery =
       if (status !== 403) {
         return false;
       }
+      // Quota / paywall limits are not auth failures
+      if (isQuotaOrPaywallError(status, responseData)) {
+        return false;
+      }
       const detail =
-        typeof responseData === 'object' &&
-        responseData !== null &&
-        String((responseData as { detail?: string }).detail || '').toLowerCase();
+        typeof responseData === 'object' && responseData !== null
+          ? String(
+              (responseData as { detail?: string }).detail || '',
+            ).toLowerCase()
+          : '';
       return (
         detail.includes('token') ||
         detail.includes('unauthorized') ||
         detail.includes('authentication') ||
-        detail.includes('expired')
+        (detail.includes('expired') && detail.includes('token'))
       );
     };
 
@@ -167,6 +174,8 @@ const axiosBaseQuery =
         typeof responseData === 'object' &&
         responseData !== null;
 
+      const isQuotaPaywall = isQuotaOrPaywallError(status, responseData);
+
       if (!consentBlock) {
         if (isTrialScanLimit) {
           const d = responseData as {
@@ -181,21 +190,28 @@ const axiosBaseQuery =
             : t.toLocaleString();
           const head =
             d.detail ||
-            'You have hit the limit for this period. Please try again later.';
+            'Daily scan limit reached. Please try again later.';
           const usage =
             d.limit != null && d.used != null
               ? ` Uses this UTC day: ${d.used}/${d.limit}.`
               : '';
           showErrMsg(
-            `${head}${usage} You can try again after ${resetLabel} (server uses midnight UTC for the daily count).`,
+            `${head}${usage} Resets at ${resetLabel} (server midnight UTC).`,
           );
-        } else if (!isNoPetDetected) {
+        } else if (!isNoPetDetected && !isQuotaPaywall) {
+          // Quota/paywall 403s: screens show Alert + Subscribe CTA (avoid double toast)
           showErrMsg(detail);
         }
       }
 
-      // Non-consent 403 that is not token-related (e.g. permission denied)
-      if (status === 403 && !consentBlock && !isAuthFailure(status, responseData)) {
+      // Do NOT logout on subscription/profile quota 403s — those are paywall limits.
+      // Only logout on unexpected non-consent, non-quota 403s that aren't auth failures.
+      if (
+        status === 403 &&
+        !consentBlock &&
+        !isQuotaPaywall &&
+        !isAuthFailure(status, responseData)
+      ) {
         performLogout();
       }
 

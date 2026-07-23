@@ -158,6 +158,7 @@ const Subscription = () => {
     products,
     plans: backendPlans,
     subscription,
+    quotas,
     isLoading,
     error,
     isInitialized,
@@ -816,6 +817,23 @@ const Subscription = () => {
                 unlock premium.
               </AppText>
             )}
+            {subscriptionStatusResolved && quotas ? (
+              <AppText
+                size={12}
+                color={colors.caption}
+                style={{ marginTop: 12, lineHeight: 18 }}
+              >
+                Tier: {quotas.tier}
+                {quotas.maxProfiles != null
+                  ? ` · Profiles ${quotas.profilesUsed}/${quotas.maxProfiles}`
+                  : ' · Unlimited profiles'}
+                {quotas.scansAllowed
+                  ? quotas.scansRemainingToday == null
+                    ? ' · Unlimited scans'
+                    : ` · ${quotas.scansRemainingToday} scans left today`
+                  : ' · Scans require a subscription'}
+              </AppText>
+            ) : null}
           </View>
         )}
 
@@ -827,7 +845,7 @@ const Subscription = () => {
           <View style={styles.benefitItem}>
             <AppText style={styles.bullet}>•</AppText>
             <AppText style={styles.benefitText}>
-              Unlimited pet emotion detection scans
+              Scans &amp; pet limits depend on your plan (trial / family / premium)
             </AppText>
           </View>
           <View style={styles.benefitItem}>

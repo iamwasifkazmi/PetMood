@@ -2,24 +2,26 @@ import { useEffect } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { useGetSubscriptionStatusQuery } from './subscriptionApiSlice';
 import { store } from '../store';
-import { clearSubscription, setSubscription } from './subscriptionSlice';
+import { setSubscriptionStatus } from './subscriptionSlice';
+import { DEFAULT_QUOTAS } from '../../utils/subscriptionQuotas';
 
 /**
- * While signed in, keeps GET /api/subscriptions/status in sync with Redux and refetches
- * on app resume (per backend integration guide).
+ * While signed in, keeps GET /api/subscriptions/status (subscription + quotas)
+ * in sync with Redux and refetches on app resume.
  */
 export function SubscriptionEntitlementSync() {
   const { data, isSuccess, refetch } = useGetSubscriptionStatusQuery();
 
   useEffect(() => {
-    if (!isSuccess) {
+    if (!isSuccess || !data) {
       return;
     }
-    if (data?.subscription) {
-      store.dispatch(setSubscription(data.subscription));
-    } else {
-      store.dispatch(clearSubscription());
-    }
+    store.dispatch(
+      setSubscriptionStatus({
+        subscription: data.subscription ?? null,
+        quotas: data.quotas ?? DEFAULT_QUOTAS,
+      }),
+    );
   }, [isSuccess, data]);
 
   useEffect(() => {

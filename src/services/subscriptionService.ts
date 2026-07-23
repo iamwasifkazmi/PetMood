@@ -15,7 +15,12 @@ import {
 import { Platform } from 'react-native';
 import { getAllProductIds, getProductIdFromIapProduct } from '../constants/subscription';
 import { store } from '../features/store';
-import { setSubscription, setError, setLoading } from '../features/subscription/subscriptionSlice';
+import {
+  setSubscriptionStatus,
+  setError,
+  setLoading,
+} from '../features/subscription/subscriptionSlice';
+import { DEFAULT_QUOTAS } from '../utils/subscriptionQuotas';
 import { subscriptionApiSlice } from '../features/subscription/subscriptionApiSlice';
 
 /**
@@ -205,13 +210,20 @@ class SubscriptionService {
       });
 
       if (result.data?.success) {
-        // Entitlement: GET /api/subscriptions/status is the source of truth
+        // Entitlement + quotas: GET /api/subscriptions/status is the source of truth
         const status = await store.dispatch(
-          subscriptionApiSlice.endpoints.getSubscriptionStatus.initiate(),
+          subscriptionApiSlice.endpoints.getSubscriptionStatus.initiate(undefined, {
+            forceRefetch: true,
+          }),
         );
-        if (status.data?.subscription) {
-          console.log('Subscription from status (canonical):', status.data.subscription);
-          store.dispatch(setSubscription(status.data.subscription));
+        if (status.data) {
+          console.log('Subscription from status (canonical):', status.data);
+          store.dispatch(
+            setSubscriptionStatus({
+              subscription: status.data.subscription ?? null,
+              quotas: status.data.quotas ?? DEFAULT_QUOTAS,
+            }),
+          );
         } else {
           const errMsg =
             'Purchase was verified, but we could not load your subscription. Try Restore or open subscription settings again in a moment.';
@@ -410,12 +422,21 @@ class SubscriptionService {
       );
 
       const statusResult = await store.dispatch(
-        subscriptionApiSlice.endpoints.getSubscriptionStatus.initiate(),
+        subscriptionApiSlice.endpoints.getSubscriptionStatus.initiate(undefined, {
+          forceRefetch: true,
+        }),
       );
 
-      if (statusResult.data?.subscription) {
-        store.dispatch(setSubscription(statusResult.data.subscription));
-        return;
+      if (statusResult.data) {
+        store.dispatch(
+          setSubscriptionStatus({
+            subscription: statusResult.data.subscription ?? null,
+            quotas: statusResult.data.quotas ?? DEFAULT_QUOTAS,
+          }),
+        );
+        if (statusResult.data.subscription?.isActive) {
+          return;
+        }
       }
 
       const purchases = await getAvailablePurchases();
