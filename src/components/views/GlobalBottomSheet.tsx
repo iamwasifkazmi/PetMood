@@ -1,12 +1,24 @@
-import BottomSheet, {
+import {
   BottomSheetBackdrop,
   BottomSheetBackdropProps,
+  BottomSheetModal,
   BottomSheetView,
 } from '@gorhom/bottom-sheet';
-import React, { forwardRef, useCallback, useMemo } from 'react';
+import React, {
+  forwardRef,
+  useCallback,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+} from 'react';
 import { StyleSheet } from 'react-native';
 
-export type GlobalBottomSheetRef = BottomSheet;
+export type GlobalBottomSheetRef = {
+  expand: () => void;
+  close: () => void;
+  collapse: () => void;
+  snapToIndex: (index: number) => void;
+};
 
 interface Props {
   snapPoints?: string[] | number[];
@@ -14,12 +26,31 @@ interface Props {
   showHandle?: boolean;
 }
 
+/**
+ * Modal-based sheet so a closed sheet never blocks touches
+ * (fixes Android freeze after opening screens like Settings).
+ */
 const GlobalBottomSheet = forwardRef<GlobalBottomSheetRef, Props>(
   (
-    { snapPoints = ['20%', '25%', '50%', '90%'], children, showHandle = false },
+    { snapPoints = ['35%'], children, showHandle = false },
     ref,
   ) => {
+    const modalRef = useRef<BottomSheetModal>(null);
     const memoizedSnapPoints = useMemo(() => snapPoints, [snapPoints]);
+
+    useImperativeHandle(ref, () => ({
+      expand: () => modalRef.current?.present(),
+      close: () => modalRef.current?.dismiss(),
+      collapse: () => modalRef.current?.dismiss(),
+      snapToIndex: (index: number) => {
+        if (index < 0) {
+          modalRef.current?.dismiss();
+        } else {
+          modalRef.current?.present();
+          modalRef.current?.snapToIndex(index);
+        }
+      },
+    }));
 
     const renderBackdrop = useCallback(
       (props: BottomSheetBackdropProps) => (
@@ -34,9 +65,8 @@ const GlobalBottomSheet = forwardRef<GlobalBottomSheetRef, Props>(
     );
 
     return (
-      <BottomSheet
-        ref={ref}
-        index={-1}
+      <BottomSheetModal
+        ref={modalRef}
         snapPoints={memoizedSnapPoints}
         backdropComponent={renderBackdrop}
         enablePanDownToClose
@@ -45,7 +75,7 @@ const GlobalBottomSheet = forwardRef<GlobalBottomSheetRef, Props>(
         <BottomSheetView style={styles.contentContainer}>
           {children}
         </BottomSheetView>
-      </BottomSheet>
+      </BottomSheetModal>
     );
   },
 );
@@ -54,8 +84,8 @@ export default GlobalBottomSheet;
 
 const styles = StyleSheet.create({
   contentContainer: {
-    flex: 1,
     padding: 16,
     paddingTop: 24,
+    paddingBottom: 28,
   },
 });

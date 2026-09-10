@@ -1,18 +1,25 @@
 /**
- * Converts a decimal (e.g., 0.756) to an integer percentage string (e.g., "76%").
- *
- * @param {number} decimal The decimal value to convert (0.0 to 1.0).
- * @returns {string} The formatted integer percentage string.
+ * Formats confidence from API (0–1 decimal or 0–100 integer) as a percentage string.
  */
-export const getCondidenceValue = (decimal: number) => {
-  let formattedPercentage = decimal;
-  if (typeof decimal !== 'number' || isNaN(decimal)) {
-    formattedPercentage = Number(decimal);
+export const getCondidenceValue = (
+  value: number | string | null | undefined,
+): string => {
+  if (value == null || value === '') {
+    return '—';
   }
 
-  // 1. Calculate the percentage and round to the nearest whole number (e.g., 0.756 -> 76)
-  const integerPercentage = Math.round(formattedPercentage * 100);
+  const n = typeof value === 'number' ? value : Number(value);
+  if (Number.isNaN(n)) {
+    return '—';
+  }
 
-  // 2. Convert to string and append the '%' symbol
-  return `${integerPercentage}%`;
+  if (n >= 0 && n <= 1) {
+    return `${Math.round(n * 100)}%`;
+  }
+
+  if (n > 1 && n <= 100) {
+    return `${Math.round(n)}%`;
+  }
+
+  return `${Math.round(Math.min(Math.max(n, 0), 100))}%`;
 };

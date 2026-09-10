@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -10,6 +10,7 @@ import Header from '../../../components/header/Header';
 import AppText from '../../../components/Text/AppText';
 import PrimaryButton from '../../../components/buttons/PrimaryButton';
 import { useTheme } from '../../../hooks/useTheme';
+import { useSafeBottomPadding } from '../../../hooks/useSafeBottomPadding';
 import { Theme } from '../../../common/theme';
 import {
   useGetAiConsentQuery,
@@ -20,18 +21,13 @@ import { showErrMsg, showSuccessMsg } from '../../../utils/flashMessage';
 
 /**
  * Dedicated screen for GET/POST `privacy/ai-consent` (grant / revoke).
- * Lets users change consent after denying at scan time or revoke after granting.
  */
 const PrivacyAiConsentScreen = () => {
   const { colors, spacing } = useTheme();
   const styles = useStyles(colors, spacing);
+  const bottomPad = useSafeBottomPadding(16);
 
-  const {
-    data,
-    isLoading,
-    isFetching,
-    refetch,
-  } = useGetAiConsentQuery();
+  const { data, isLoading, isFetching } = useGetAiConsentQuery();
   const [setAiConsent, { isLoading: isSaving }] = useSetAiConsentMutation();
 
   const [allowAi, setAllowAi] = useState(false);
@@ -39,27 +35,47 @@ const PrivacyAiConsentScreen = () => {
     nyckel: false,
     assemblyai: false,
   });
+  /** Prevent refetch/response from fighting the optimistic toggle UI */
+  const syncingRef = useRef(false);
+  const hydratedRef = useRef(false);
 
   useEffect(() => {
+    if (syncingRef.current) {
+      return;
+    }
     const c = data?.consent;
-    if (!c) return;
+    if (!c) {
+      return;
+    }
     setAllowAi(!!c.granted);
     setProviders({
       nyckel: c.providers?.includes('nyckel') ?? false,
       assemblyai: c.providers?.includes('assemblyai') ?? false,
     });
-  }, [data]);
-
-  const selectedProviderKeys = (): AiProviderKey[] =>
-    (['nyckel', 'assemblyai'] as AiProviderKey[]).filter(k => providers[k]);
+    hydratedRef.current = true;
+  }, [data?.consent?.granted, data?.consent?.providers?.join(',')]);
 
   const persist = async (granted: boolean, nextProviders: AiProviderKey[]) => {
+    syncingRef.current = true;
     try {
       await setAiConsent({ granted, providers: nextProviders }).unwrap();
-      await refetch();
-      showSuccessMsg(granted ? 'AI analysis access updated.' : 'AI analysis access revoked.');
+      showSuccessMsg(
+        granted ? 'AI analysis access updated.' : 'AI analysis access revoked.',
+      );
     } catch {
+      // Roll back from server truth on next render
+      const c = data?.consent;
+      setAllowAi(!!c?.granted);
+      setProviders({
+        nyckel: c?.providers?.includes('nyckel') ?? false,
+        assemblyai: c?.providers?.includes('assemblyai') ?? false,
+      });
       showErrMsg('Could not update consent. Please try again.');
+    } finally {
+      // Allow a beat so RTK cache update doesn't immediately flip the switch
+      setTimeout(() => {
+        syncingRef.current = false;
+      }, 400);
     }
   };
 
@@ -94,12 +110,16 @@ const PrivacyAiConsentScreen = () => {
   };
 
   const disclosure = data?.disclosure;
+  const showInitialLoader = (isLoading || isFetching) && !hydratedRef.current && !data;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Header />
       <ScrollView
-        contentContainerStyle={{ padding: spacing.padding, paddingBottom: 40 }}
+        contentContainerStyle={{
+          padding: spacing.padding,
+          paddingBottom: 40 + bottomPad,
+        }}
         showsVerticalScrollIndicator={false}
       >
         <AppText variant="heading" fontWeight="semiBold" style={{ marginBottom: 8 }}>
@@ -107,12 +127,10 @@ const PrivacyAiConsentScreen = () => {
         </AppText>
         <AppText size={14} color={colors.caption} style={{ marginBottom: 20 }}>
           Control whether PetMood may send your photo or audio to third-party AI
-          providers (Nyckel for images, AssemblyAI for audio) for emotion detection.
-          You can grant access here if you previously tapped &quot;Not now&quot; during a
-          scan, or revoke access at any time.
+          providers for emotion detection. You can grant or revoke access at any time.
         </AppText>
 
-        {(isLoading || isFetching) && !data ? (
+        {showInitialLoader ? (
           <View style={styles.centered}>
             <ActivityIndicator size="large" color={colors.primary} />
             <AppText style={{ marginTop: 12 }} color={colors.caption}>
@@ -134,16 +152,17 @@ const PrivacyAiConsentScreen = () => {
 
             <View style={styles.card}>
               <View style={styles.row}>
-                <AppText fontWeight="semiBold">Allow third-party AI analysis</AppText>
-                {isSaving ? (
-                  <ActivityIndicator color={colors.primary} />
-                ) : (
-                  <Switch value={allowAi} onValueChange={onMasterToggle} />
-                )}
+                <AppText fontWeight="semiBold" style={{ flex: 1 }}>
+                  Allow third-party AI analysis
+                </AppText>
+                <Switch
+                  value={allowAi}
+                  onValueChange={onMasterToggle}
+                  disabled={isSaving}
+                />
               </View>
               <AppText size={12} color={colors.caption} style={{ marginTop: 8 }}>
-                When off, scans that require AI will ask for consent again or may be
-                blocked until you enable providers below.
+                When off, scans that require AI may ask for consent again.
               </AppText>
             </View>
 
@@ -159,7 +178,9 @@ const PrivacyAiConsentScreen = () => {
                   return (
                     <View key={key} style={[styles.providerBlock, { marginBottom: 16 }]}>
                       <View style={styles.row}>
-                        <AppText fontWeight="medium">{label}</AppText>
+                        <AppText fontWeight="medium" style={{ flex: 1 }}>
+                          {label}
+                        </AppText>
                         <Switch
                           value={providers[key]}
                           onValueChange={v => onProviderToggle(key, v)}

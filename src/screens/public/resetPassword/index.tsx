@@ -1,27 +1,31 @@
 import React, { useState } from 'react';
 import {
+  Platform,
   Text,
   View,
   TouchableOpacity,
   StyleSheet,
   TextInput,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import CountryPicker, { Country } from 'react-native-country-picker-modal';
 import parsePhoneNumber from 'libphonenumber-js';
 import { useFormik } from 'formik';
 import { showMessage } from 'react-native-flash-message';
 
-import icons from '../../../assets/icons/icons';
 import { Theme } from '../../../common/theme';
 import { useTheme } from '../../../hooks/useTheme';
 import PrimaryButton from '../../../components/buttons/PrimaryButton';
 import AppText from '../../../components/Text/AppText';
+import FieldError from '../../../components/inputs/FieldError';
 import LogoView from '../../../components/views/LogoView';
+import ScreenSafeArea from '../../../components/layout/ScreenSafeArea';
 import { ResetPasswordProps, RouteName } from '../../../navigation/types';
 import { useForgotPasswordMutation } from '../../../features/auth/authApiSlice';
-import { phoneSchema } from '../../../utils/validations'; // 👈 create this if not already
+import {
+  getApiErrorMessage,
+  phoneSchema,
+} from '../../../utils/validations';
 
 const DEFAULT_COUNTRY: Country = {
   cca2: 'US',
@@ -40,20 +44,20 @@ const ResetPassword = ({ navigation }: ResetPasswordProps) => {
 
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const formik = useFormik({
     initialValues: { number: '' },
     validationSchema: phoneSchema,
+    validateOnChange: true,
+    validateOnBlur: true,
     onSubmit: async values => {
       const formattedPhoneNo = parsePhoneNumber(
         '+' + country.callingCode[0] + values.number,
       )?.formatInternational();
 
       if (!formattedPhoneNo) {
-        showMessage({
-          message: 'Please enter a valid phone number',
-          type: 'danger',
-        });
+        formik.setFieldError('number', 'Please enter a valid phone number');
         return;
       }
 
@@ -70,40 +74,47 @@ const ResetPassword = ({ navigation }: ResetPasswordProps) => {
           phoneNumber,
           isFromResetPassword: true,
         });
-      } catch (error: any) {
-        showMessage({
-          message: 'Request failed',
-          description: error?.data?.message || 'Please try again',
-          type: 'danger',
-        });
+      } catch (error: unknown) {
+        const msg = getApiErrorMessage(
+          error,
+          'This phone number is not registered. Please check and try again.',
+        );
+        formik.setFieldError('number', msg);
       }
     },
   });
 
+  const showError =
+    (submitAttempted || formik.touched.number) && formik.errors.number
+      ? String(formik.errors.number)
+      : undefined;
+
   const handleSubmit = async () => {
-    await formik.validateForm();
-    const firstError = Object.values(formik.errors)[0];
-    if (firstError) {
-      showMessage({ message: firstError as string, type: 'danger' });
+    setSubmitAttempted(true);
+    formik.setTouched({ number: true });
+    const errors = await formik.validateForm();
+    if (Object.keys(errors).length > 0) {
       return;
     }
     formik.handleSubmit();
   };
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.primary }}
-      edges={['top']}
-    >
-      <View
-        style={{ paddingTop: 60, justifyContent: 'space-between', flex: 1 }}
-      >
+    <ScreenSafeArea style={{ backgroundColor: colors.primary }}>
+      <View style={{ paddingTop: 60, flex: 1 }}>
         <LogoView />
 
         <KeyboardAwareScrollView
           style={styles.bottomView}
+          contentContainerStyle={{ paddingBottom: 72, flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          enableOnAndroid
+          enableAutomaticScroll
+          extraScrollHeight={Platform.OS === 'android' ? 100 : 40}
+          extraHeight={Platform.OS === 'android' ? 140 : 60}
+          keyboardOpeningTime={0}
+          enableResetScrollToCoords={false}
         >
           <Text style={styles.title}>Forgot Password</Text>
 
@@ -115,18 +126,13 @@ const ResetPassword = ({ navigation }: ResetPasswordProps) => {
             password.
           </AppText>
 
-          {/* 📱 Country Picker + Phone Input */}
           <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 8,
-              borderWidth: 1,
-              borderColor: colors.inputBorder,
-              borderRadius: 6,
-              paddingHorizontal: 12,
-              height: 46,
-            }}
+            style={[
+              styles.phoneRow,
+              {
+                borderColor: showError ? colors.danger : colors.inputBorder,
+              },
+            ]}
           >
             <TouchableOpacity onPress={() => setShowCountryPicker(true)}>
               <CountryPicker
@@ -146,15 +152,18 @@ const ResetPassword = ({ navigation }: ResetPasswordProps) => {
             </TouchableOpacity>
 
             <TextInput
-              style={{ flex: 1 }}
-              placeholder="Mobile Number"
+              style={[styles.phoneInput, { color: colors.text }]}
+              placeholder="Mobile Number *"
+              placeholderTextColor={colors.placeholder}
               keyboardType="phone-pad"
               value={formik.values.number}
               onChangeText={formik.handleChange('number')}
+              onBlur={formik.handleBlur('number')}
             />
           </View>
+          <FieldError message={showError} />
 
-          <View style={{ marginTop: 24, marginBottom: 20 }}>
+          <View style={{ marginTop: 24 }}>
             <PrimaryButton
               onPress={handleSubmit}
               title="Reset Password"
@@ -180,7 +189,7 @@ const ResetPassword = ({ navigation }: ResetPasswordProps) => {
           </View>
         </KeyboardAwareScrollView>
       </View>
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 };
 
@@ -197,8 +206,8 @@ const useStyles = (
       padding: spacing.padding,
       borderTopEndRadius: 50,
       borderTopStartRadius: 50,
-      paddingBottom: 40,
       marginTop: 40,
+      flex: 1,
     },
     title: {
       fontSize: 24,
@@ -206,5 +215,20 @@ const useStyles = (
       color: colors.text,
       ...fonts.semiBold,
       marginBottom: 16,
+    },
+    phoneRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      borderWidth: 1,
+      borderRadius: 6,
+      paddingHorizontal: 12,
+      minHeight: 46,
+      backgroundColor: colors.card,
+    },
+    phoneInput: {
+      flex: 1,
+      fontSize: 15,
+      paddingVertical: 8,
     },
   });

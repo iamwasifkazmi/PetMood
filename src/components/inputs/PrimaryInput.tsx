@@ -9,13 +9,17 @@ import {
 } from 'react-native';
 import FastImage, { FastImageProps } from 'react-native-fast-image';
 import { useTheme } from '../../hooks/useTheme';
-import Feather from 'react-native-vector-icons/Feather'; // 👈 default for eye icon
+import Feather from 'react-native-vector-icons/Feather';
 import type { IconProps } from 'react-native-vector-icons/Icon';
+import FieldError from './FieldError';
 
 type PrimaryInputProps = TextInputProps & {
   containerStyle?: ViewStyle;
+  wrapperStyle?: ViewStyle;
   rightImageSource?: FastImageProps['source'];
   leftImageSource?: FastImageProps['source'];
+  error?: string | null;
+  required?: boolean;
 
   leftIcon?: string;
   rightIcon?: string;
@@ -31,8 +35,11 @@ type PrimaryInputProps = TextInputProps & {
 const PrimaryInput = forwardRef<TextInput, PrimaryInputProps>(function PrimaryInput(
   {
     containerStyle,
+    wrapperStyle,
     rightImageSource,
     leftImageSource,
+    error,
+    required,
     leftIcon,
     rightIcon,
     LeftIconComponent,
@@ -41,6 +48,7 @@ const PrimaryInput = forwardRef<TextInput, PrimaryInputProps>(function PrimaryIn
     onRightIconPress,
     iconSize = 20,
     iconColor = '#1C6971',
+    placeholder,
     ...props
   },
   ref,
@@ -50,23 +58,32 @@ const PrimaryInput = forwardRef<TextInput, PrimaryInputProps>(function PrimaryIn
   const [isFocused, setIsFocused] = useState(false);
   const [isSecure, setIsSecure] = useState(props.secureTextEntry ?? false);
 
+  const hasError = Boolean(error);
+
   const styles = StyleSheet.create({
+    wrapper: {
+      marginTop: 10,
+    },
     container: {
       borderWidth: 1,
-      borderColor: isFocused ? '#7C7C7C' : colors.inputBorder,
+      borderColor: hasError
+        ? colors.danger
+        : isFocused
+          ? '#7C7C7C'
+          : colors.inputBorder,
       minHeight: 46,
       flexDirection: 'row',
       justifyContent: 'space-between',
       borderRadius: 6,
-      marginTop: 10,
       paddingHorizontal: 15,
       alignItems: 'center',
       backgroundColor: colors.card,
       gap: 12,
     },
     input: {
-      height: '100%',
       flex: 1,
+      minHeight: 40,
+      paddingVertical: 8,
       fontSize: 15,
       ...fonts.medium,
       color: colors.text,
@@ -79,6 +96,8 @@ const PrimaryInput = forwardRef<TextInput, PrimaryInputProps>(function PrimaryIn
   });
 
   const resolvedColor = iconColor || colors.text;
+  const resolvedPlaceholder =
+    required && placeholder ? `${placeholder} *` : placeholder;
 
   const handleRightPress = () => {
     if (props.secureTextEntry) {
@@ -89,7 +108,8 @@ const PrimaryInput = forwardRef<TextInput, PrimaryInputProps>(function PrimaryIn
   };
 
   return (
-    <View style={[styles.container, containerStyle]}>
+    <View style={[styles.wrapper, wrapperStyle]}>
+      <View style={[styles.container, containerStyle]}>
       {/* Left Image or Icon */}
       {leftImageSource ? (
         <FastImage
@@ -110,6 +130,7 @@ const PrimaryInput = forwardRef<TextInput, PrimaryInputProps>(function PrimaryIn
       {/* TextInput */}
       <TextInput
         ref={ref}
+        placeholder={resolvedPlaceholder}
         placeholderTextColor={colors.placeholder}
         {...props}
         onFocus={e => {
@@ -150,6 +171,8 @@ const PrimaryInput = forwardRef<TextInput, PrimaryInputProps>(function PrimaryIn
           />
         </TouchableOpacity>
       ) : null}
+      </View>
+      <FieldError message={error} />
     </View>
   );
 });

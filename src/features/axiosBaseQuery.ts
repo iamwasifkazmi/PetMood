@@ -17,11 +17,12 @@ const axiosBaseQuery =
       params?: AxiosRequestConfig['params'];
       headers?: AxiosRequestConfig['headers'];
       _baseUrl?: AxiosRequestConfig['baseURL'];
+      timeout?: number;
     },
     unknown,
     unknown
   > =>
-  async ({ url, method, data, params, headers, _baseUrl }) => {
+  async ({ url, method, data, params, headers, _baseUrl, timeout }) => {
     const resolvedBase =
       typeof _baseUrl === 'string' ? _baseUrl : baseUrl;
     const absoluteUrl =
@@ -43,19 +44,29 @@ const axiosBaseQuery =
         '\nreq-params: ' + JSON.stringify(params),
       );
 
+      const isMultipart =
+        typeof FormData !== 'undefined' && data instanceof FormData;
+      const requestHeaders: AxiosRequestConfig['headers'] = {
+        ...(bearerToken &&
+          !skipAuthBearer && {
+            Authorization: `Bearer ${bearerToken}`,
+          }),
+        ...headers,
+      };
+      // Let the runtime set multipart boundary; a bare multipart Content-Type breaks uploads
+      if (isMultipart && requestHeaders) {
+        delete (requestHeaders as Record<string, unknown>)['Content-Type'];
+        delete (requestHeaders as Record<string, unknown>)['content-type'];
+      }
+
       return axios({
         url: url,
         baseURL: typeof _baseUrl === 'string' ? _baseUrl : baseUrl,
         method,
         data,
         params,
-        headers: {
-          ...(bearerToken &&
-            !skipAuthBearer && {
-              Authorization: `Bearer ${bearerToken}`,
-            }),
-          ...headers,
-        },
+        timeout: timeout ?? (isMultipart ? 180000 : undefined),
+        headers: requestHeaders,
       });
     };
 
@@ -164,10 +175,12 @@ const axiosBaseQuery =
       }
 
       const isTrialScanLimit =
-        status === 429 &&
+        (status === 429 || status === 403) &&
         typeof responseData === 'object' &&
         responseData !== null &&
-        typeof (responseData as { resetsAt?: string }).resetsAt === 'string';
+        (String((responseData as { code?: string }).code || '') ===
+          'daily_scan_limit_reached' ||
+          typeof (responseData as { resetsAt?: string }).resetsAt === 'string');
 
       const isNoPetDetected =
         status === 422 &&
@@ -176,30 +189,25 @@ const axiosBaseQuery =
 
       const isQuotaPaywall = isQuotaOrPaywallError(status, responseData);
 
+      // Screens that render field-level errors — avoid duplicate top flash toast
+      const urlLower = String(absoluteUrl || '').toLowerCase();
+      const isFieldHandledAuthError =
+        urlLower.includes('identitytoolkit.googleapis.com') ||
+        urlLower.includes('auth/register') ||
+        urlLower.includes('auth/forgot-password') ||
+        urlLower.includes('auth/verify-otp') ||
+        urlLower.includes('auth/verify-reset-otp') ||
+        urlLower.includes('auth/resend-otp') ||
+        urlLower.includes('auth/resend-reset-otp') ||
+        urlLower.includes('auth/reset-password');
+
       if (!consentBlock) {
-        if (isTrialScanLimit) {
-          const d = responseData as {
-            detail?: string;
-            resetsAt: string;
-            used?: number;
-            limit?: number;
-          };
-          const t = new Date(d.resetsAt);
-          const resetLabel = Number.isNaN(t.getTime())
-            ? d.resetsAt
-            : t.toLocaleString();
-          const head =
-            d.detail ||
-            'Daily scan limit reached. Please try again later.';
-          const usage =
-            d.limit != null && d.used != null
-              ? ` Uses this UTC day: ${d.used}/${d.limit}.`
-              : '';
-          showErrMsg(
-            `${head}${usage} Resets at ${resetLabel} (server midnight UTC).`,
-          );
-        } else if (!isNoPetDetected && !isQuotaPaywall) {
-          // Quota/paywall 403s: screens show Alert + Subscribe CTA (avoid double toast)
+        if (
+          !isTrialScanLimit &&
+          !isNoPetDetected &&
+          !isQuotaPaywall &&
+          !isFieldHandledAuthError
+        ) {
           showErrMsg(detail);
         }
       }

@@ -15,13 +15,13 @@ import {
   ViewStyle,
 } from 'react-native';
 import Animated, {
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
 import Feather from 'react-native-vector-icons/Feather';
 import { useTheme } from '../hooks/useTheme';
+import { useSafeBottomPadding } from '../hooks/useSafeBottomPadding';
 import AppText from './Text/AppText';
 
 export interface DropdownOption {
@@ -66,6 +66,7 @@ const Dropdown: React.FC<DropdownProps> = ({
   searchPlaceholder = 'Search...',
 }) => {
   const { colors, fonts } = useTheme();
+  const bottomPad = useSafeBottomPadding(12);
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const rotation = useSharedValue(0);
@@ -89,16 +90,14 @@ const Dropdown: React.FC<DropdownProps> = ({
     setIsOpen(true);
     rotation.value = withTiming(180, { duration: 200 });
     scale.value = withTiming(1.1, { duration: 150 });
-    opacity.value = withTiming(1, { duration: 200 });
+    opacity.value = 1;
   };
 
   const handleClose = () => {
-    setSearchQuery('');
     rotation.value = withTiming(0, { duration: 200 });
     scale.value = withTiming(1, { duration: 150 });
-    opacity.value = withTiming(0, { duration: 150 }, () => {
-      runOnJS(setIsOpen)(false);
-    });
+    setIsOpen(false);
+    opacity.value = 0;
   };
 
   const handleSelect = (value: string | number) => {
@@ -163,7 +162,7 @@ const Dropdown: React.FC<DropdownProps> = ({
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
       maxHeight: maxHeight,
-      paddingBottom: 20,
+      paddingBottom: bottomPad,
     },
     modalHeader: {
       flexDirection: 'row',
@@ -282,7 +281,7 @@ const Dropdown: React.FC<DropdownProps> = ({
       <Modal
         visible={isOpen}
         transparent
-        animationType="none"
+        animationType="fade"
         onRequestClose={handleClose}
       >
         <Animated.View style={[styles.modalOverlay, animatedModalStyle]}>

@@ -1,7 +1,6 @@
 import moment from 'moment';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Image,
   Pressable,
   StyleSheet,
@@ -9,9 +8,9 @@ import {
   View,
 } from 'react-native';
 import { showMessage } from 'react-native-flash-message';
+import { showSuccessMsg } from '../../../utils/flashMessage';
 import ImagePicker from 'react-native-image-crop-picker';
 import { useFocusEffect } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import AntDesign from 'react-native-vector-icons/AntDesign';
 import icons from '../../../assets/icons/icons';
 import images from '../../../assets/images';
@@ -49,10 +48,12 @@ import {
 } from '../../../services/permission';
 import { formatDate } from '../../../utils/formatTime';
 import {
-  getApiErrorCode,
+  addPetButtonTitle,
   getApiErrorDetail,
+  isAddPetButtonDisabled,
   profilesUsageLabel,
 } from '../../../utils/subscriptionQuotas';
+import { showProfileLimitAlert } from '../../../utils/subscriptionAlerts';
 import { navigateToSubscription } from '../../../utils/navigateToSubscription';
 import PetDetails from './PetDetails';
 import { ProfileProps } from '../../../navigation/types';
@@ -127,17 +128,10 @@ const Profile = ({ route, navigation }: ProfileProps) => {
 
   const openAddPetForm = useCallback(() => {
     if (!canAddPet) {
-      const detail =
-        quotas?.tier === 'none'
-          ? 'You can only create one pet profile without a subscription. Please subscribe to add more profiles.'
-          : 'Profile limit reached for your subscription. Please upgrade to add more pets.';
-      Alert.alert('Profile limit', detail, [
-        { text: 'Not now', style: 'cancel' },
-        {
-          text: 'Subscribe',
-          onPress: () => navigateToSubscription(navigation as any),
-        },
-      ]);
+      if (isAddPetButtonDisabled(quotas)) {
+        return;
+      }
+      navigateToSubscription(navigation as any);
       return;
     }
     setPetName('');
@@ -150,7 +144,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
     setIsDeleteConfirmVisible(false);
     setIsEdit(false);
     setIsProfileCreated(true);
-  }, [canAddPet, quotas?.tier, navigation]);
+  }, [canAddPet, navigation]);
 
   useFocusEffect(
     useCallback(() => {
@@ -208,10 +202,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
           formData: formData,
         }).unwrap();
         console.log('res', res);
-        showMessage({
-          message: 'Pet profile updated successfully!',
-          type: 'success',
-        });
+        showSuccessMsg('Pet profile updated successfully!');
         setIsEdit(false);
         setShowPetDetails(true);
       } else {
@@ -241,21 +232,8 @@ const Profile = ({ route, navigation }: ProfileProps) => {
         void refetchStatus();
       }
     } catch (err: any) {
-      const code = getApiErrorCode(err);
       const detail = getApiErrorDetail(err);
-      if (err?.status === 403 && code === 'profile_limit_reached') {
-        Alert.alert(
-          'Profile limit',
-          detail ||
-            'Profile limit reached for your subscription. Please subscribe to add more pets.',
-          [
-            { text: 'Not now', style: 'cancel' },
-            {
-              text: 'Subscribe',
-              onPress: () => navigateToSubscription(navigation as any),
-            },
-          ],
-        );
+      if (showProfileLimitAlert(err, navigation as any)) {
         return;
       }
       showMessage({
@@ -312,7 +290,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+    <View style={{ flex: 1 }}>
       <Header />
       <View style={{ padding: spacing.padding, flex: 1, paddingBottom: 0 }}>
         <View style={styles.headingView}>
@@ -442,11 +420,8 @@ const Profile = ({ route, navigation }: ProfileProps) => {
             <PrimaryButton
               onPress={openAddPetForm}
               type="outlined"
-              title={
-                canAddPet
-                  ? 'Add New Pet Profile'
-                  : 'Subscribe to Add More Pets'
-              }
+              title={addPetButtonTitle(quotas)}
+              disabled={isAddPetButtonDisabled(quotas)}
               style={{ backgroundColor: colors.card, marginVertical: 24 }}
             />
             {profilesUsageLabel(quotas) ? (
@@ -507,7 +482,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
           onPress={isDeleteConfirmVisible ? handleConfirmDelete : handleOkay}
         />
       </GlobalBottomSheet>
-    </SafeAreaView>
+    </View>
   );
 };
 

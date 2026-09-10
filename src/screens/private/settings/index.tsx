@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Alert, Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import ImagePicker from 'react-native-image-crop-picker';
 import { useNavigation } from '@react-navigation/native';
 import icons from '../../../assets/icons/icons';
@@ -165,7 +165,11 @@ const Settings = () => {
   return (
     <View style={{ flex: 1 }}>
       <Header />
-      <View style={{ padding: spacing.padding }}>
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.padding, paddingBottom: 40 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <AppText
           variant="heading"
           fontWeight="semiBold"
@@ -311,10 +315,10 @@ const Settings = () => {
             onPress={handleSaveChanges}
           />
         </View>
-      </View>
+      </ScrollView>
 
       {/* Bottom Sheet */}
-      <GlobalBottomSheet ref={bottomSheetRef} snapPoints={['10%']}>
+      <GlobalBottomSheet ref={bottomSheetRef} snapPoints={['35%']}>
         <SuccessImage />
         <AppText
           variant="subheading"

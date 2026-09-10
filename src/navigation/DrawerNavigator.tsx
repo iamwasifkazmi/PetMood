@@ -1,5 +1,5 @@
 // navigation/DrawerNavigator.tsx
-import { createDrawerNavigator } from '@react-navigation/drawer';
+import { createDrawerNavigator, DrawerContentScrollView } from '@react-navigation/drawer';
 import { DrawerActions, useNavigation } from '@react-navigation/native';
 import React from 'react';
 import {
@@ -12,9 +12,9 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSelector } from 'react-redux';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Screens
-import { RootState, store } from '../features/store';
+import { RootState } from '../features/store';
 import { SubscriptionEntitlementSync } from '../features/subscription/SubscriptionEntitlementSync';
 import { useDeleteUserAccountMutation } from '../features/user/userApiSlice';
 import { performLogout } from '../services/authSession';
@@ -24,13 +24,20 @@ import Settings from '../screens/private/settings';
 import Support from '../screens/private/support';
 import Subscription from '../screens/private/subscription';
 import BottomTabStack from './BottomTabStack';
+import { useTheme } from '../hooks/useTheme';
 
 const Drawer = createDrawerNavigator();
 
 const CustomDrawerContent = (props: any) => {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const { user } = useSelector((state: RootState) => state.user);
   const [deleteUserAccount] = useDeleteUserAccountMutation();
+  const activeRoute = props.state?.routes?.[props.state.index]?.name;
+
+  const isActive = (name: string) => activeRoute === name;
+
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account',
@@ -45,7 +52,7 @@ const CustomDrawerContent = (props: any) => {
               await deleteUserAccount().unwrap();
               navigation.dispatch(DrawerActions.closeDrawer());
               performLogout();
-            } catch (error) {
+            } catch {
               Alert.alert(
                 'Error',
                 'Failed to delete account. Please try again later.',
@@ -71,9 +78,62 @@ const CustomDrawerContent = (props: any) => {
     ]);
   };
 
+  const go = (routeName: string, params?: object) => {
+    props.navigation.navigate(routeName, params);
+    props.navigation.dispatch(DrawerActions.closeDrawer());
+  };
+
+  const MenuRow = ({
+    label,
+    icon,
+    routeName,
+    onPress,
+    danger,
+  }: {
+    label: string;
+    icon: string;
+    routeName?: string;
+    onPress?: () => void;
+    danger?: boolean;
+  }) => {
+    const active = routeName ? isActive(routeName) : false;
+    return (
+      <TouchableOpacity
+        style={[
+          styles.menuItem,
+          active && {
+            backgroundColor: colors.primary + '18',
+            borderRadius: 10,
+          },
+        ]}
+        onPress={onPress}
+      >
+        <Icon
+          name={icon}
+          size={22}
+          color={danger ? 'red' : active ? colors.primary : '#999'}
+        />
+        <Text
+          style={[
+            styles.menuText,
+            active && { color: colors.primary, fontWeight: '700' },
+            danger && { color: 'red', fontWeight: 'bold' },
+          ]}
+        >
+          {label}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
   return (
-    <View {...props} contentContainerStyle={{ flex: 1 }}>
-      {/* Profile Header */}
+    <DrawerContentScrollView
+      {...props}
+      contentContainerStyle={{
+        flexGrow: 1,
+        paddingBottom: Math.max(insets.bottom, 16),
+      }}
+    >
       <View style={styles.header}>
         <Image
           source={
@@ -90,89 +150,56 @@ const CustomDrawerContent = (props: any) => {
         </View>
       </View>
 
-      {/* Drawer Items */}
       <View style={styles.menuItems}>
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => {
-            props.navigation.navigate('MainApp', {
-              screen: 'Home', // <-- Replace with your actual tab name
-            });
-            props.navigation.dispatch(DrawerActions.closeDrawer());
-          }}
-        >
-          <Icon name="home-outline" size={22} color="#999" />
-          <Text style={styles.menuText}>Home</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => {
-            props.navigation.navigate('Settings');
-            props.navigation.dispatch(DrawerActions.closeDrawer());
-          }}
-        >
-          <Icon name="cog-outline" size={22} color="#999" />
-          <Text style={styles.menuText}>Settings</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => {
-            props.navigation.navigate('AiConsent');
-            props.navigation.dispatch(DrawerActions.closeDrawer());
-          }}
-        >
-          <Icon name="lock-outline" size={22} color="#999" />
-          <Text style={styles.menuText}>AI consent</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => {
-            props.navigation.navigate('Subscription');
-            props.navigation.dispatch(DrawerActions.closeDrawer());
-          }}
-        >
-          <Icon name="crown-outline" size={22} color="#999" />
-          <Text style={styles.menuText}>Subscription</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => {
-            props.navigation.navigate('Support');
-            props.navigation.dispatch(DrawerActions.closeDrawer());
-          }}
-        >
-          <Icon name="face-agent" size={22} color="#999" />
-          <Text style={styles.menuText}>Support</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={() => {
-            props.navigation.navigate('PrivacyPolicy');
-            props.navigation.dispatch(DrawerActions.closeDrawer());
-          }}
-        >
-          <Icon name="file-lock-outline" size={22} color="#999" />
-          <Text style={styles.menuText}>Privacy Policy</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.menuItem} onPress={handleDeleteAccount}>
-          <Icon name="delete-outline" size={22} color="red" />
-          <Text style={[styles.menuText, { color: 'red', fontWeight: 'bold' }]}>
-            Delete Account
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
-          <Icon name="logout" size={22} color="#999" />
-          <Text style={styles.menuText}>Logout</Text>
-        </TouchableOpacity>
+        <MenuRow
+          label="Home"
+          icon="home-outline"
+          routeName="MainApp"
+          onPress={() =>
+            go('MainApp', {
+              screen: 'Home',
+            })
+          }
+        />
+        <MenuRow
+          label="Settings"
+          icon="cog-outline"
+          routeName="Settings"
+          onPress={() => go('Settings')}
+        />
+        <MenuRow
+          label="AI consent"
+          icon="lock-outline"
+          routeName="AiConsent"
+          onPress={() => go('AiConsent')}
+        />
+        <MenuRow
+          label="Subscription"
+          icon="crown-outline"
+          routeName="Subscription"
+          onPress={() => go('Subscription')}
+        />
+        <MenuRow
+          label="Support"
+          icon="face-agent"
+          routeName="Support"
+          onPress={() => go('Support')}
+        />
+        <MenuRow
+          label="Privacy Policy"
+          icon="file-lock-outline"
+          routeName="PrivacyPolicy"
+          onPress={() => go('PrivacyPolicy')}
+        />
+        <MenuRow
+          label="Delete Account"
+          icon="delete-outline"
+          danger
+          onPress={handleDeleteAccount}
+        />
+        <MenuRow label="Logout" icon="logout" onPress={handleLogout} />
       </View>
-    </View>
+    </DrawerContentScrollView>
   );
 };
 
@@ -180,109 +207,107 @@ const DrawerNavigator = () => {
   return (
     <>
       <SubscriptionEntitlementSync />
-    <Drawer.Navigator
-      screenOptions={{
-        headerShown: false,
-        drawerPosition: 'left',
-        drawerType: 'front',
-        swipeEnabled: true,
-      }}
-      drawerContent={props => <CustomDrawerContent {...props} />}
-    >
-      <Drawer.Screen
-        name="MainApp"
-        component={BottomTabStack}
-        options={{
-          drawerLabel: 'Home',
-          title: 'Home',
+      <Drawer.Navigator
+        screenOptions={{
+          headerShown: false,
+          drawerPosition: 'left',
+          drawerType: 'front',
+          swipeEnabled: true,
         }}
-      />
-
-      {/* Drawer-only screens */}
-      <Drawer.Screen
-        name="Settings"
-        component={Settings}
-        options={{
-          drawerLabel: 'Settings',
-          title: 'Settings',
-        }}
-      />
-      <Drawer.Screen
-        name="AiConsent"
-        component={PrivacyAiConsentScreen}
-        options={{
-          drawerLabel: 'AI consent',
-          title: 'AI analysis consent',
-        }}
-      />
-      <Drawer.Screen
-        name="Subscription"
-        component={Subscription}
-        options={{
-          drawerLabel: 'Subscription',
-          title: 'Subscription',
-        }}
-      />
-      <Drawer.Screen
-        name="Support"
-        component={Support}
-        options={{
-          drawerLabel: 'Support',
-          title: 'Support',
-        }}
-      />
-      <Drawer.Screen
-        name="PrivacyPolicy"
-        component={PrivacyPolicy}
-        options={{
-          drawerLabel: 'Privacy Policy',
-          title: 'Privacy Policy',
-        }}
-      />
-    </Drawer.Navigator>
+        drawerContent={props => <CustomDrawerContent {...props} />}
+      >
+        <Drawer.Screen
+          name="MainApp"
+          component={BottomTabStack}
+          options={{
+            drawerLabel: 'Home',
+            title: 'Home',
+          }}
+        />
+        <Drawer.Screen
+          name="Settings"
+          component={Settings}
+          options={{
+            drawerLabel: 'Settings',
+            title: 'Settings',
+          }}
+        />
+        <Drawer.Screen
+          name="AiConsent"
+          component={PrivacyAiConsentScreen}
+          options={{
+            drawerLabel: 'AI consent',
+            title: 'AI analysis consent',
+          }}
+        />
+        <Drawer.Screen
+          name="Subscription"
+          component={Subscription}
+          options={{
+            drawerLabel: 'Subscription',
+            title: 'Subscription',
+          }}
+        />
+        <Drawer.Screen
+          name="Support"
+          component={Support}
+          options={{
+            drawerLabel: 'Support',
+            title: 'Support',
+          }}
+        />
+        <Drawer.Screen
+          name="PrivacyPolicy"
+          component={PrivacyPolicy}
+          options={{
+            drawerLabel: 'Privacy Policy',
+            title: 'Privacy Policy',
+          }}
+        />
+      </Drawer.Navigator>
     </>
   );
 };
 
+export default DrawerNavigator;
+
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: '#116466',
-    padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 80,
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    gap: 12,
   },
   profileImage: {
-    width: 55,
-    height: 55,
-    borderRadius: 27.5,
-    marginRight: 12,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
   },
   userName: {
-    color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    color: '#222',
   },
   userEmail: {
-    color: '#fff',
-    fontSize: 14,
+    fontSize: 12,
+    color: '#888',
     marginTop: 2,
   },
   menuItems: {
-    marginTop: 20,
-    paddingHorizontal: 15,
+    padding: 12,
+    gap: 4,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
+    paddingHorizontal: 12,
+    gap: 14,
   },
   menuText: {
     fontSize: 15,
-    fontWeight: '600',
-    marginLeft: 15,
-    color: '#999',
+    color: '#333',
   },
 });
-
-export default DrawerNavigator;

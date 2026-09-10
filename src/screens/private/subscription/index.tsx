@@ -17,6 +17,7 @@ import PrimaryButton from '../../../components/buttons/PrimaryButton';
 import Header from '../../../components/header/Header';
 import { useTheme } from '../../../hooks/useTheme';
 import { useSubscription } from '../../../hooks/useSubscription';
+import { useSafeBottomPadding } from '../../../hooks/useSafeBottomPadding';
 import {
   SUBSCRIPTION_PLANS,
   SUBSCRIPTION_TRIAL_DAYS,
@@ -35,6 +36,7 @@ import {
   TERMS_AND_CONDITIONS_URL,
   TERMS_OF_USE_EULA_URL,
 } from '../../../common/legalUrls';
+import { humanizeQuotaTier } from '../../../utils/subscriptionQuotas';
 
 /** Opens Apple’s subscription management (Safari / account). */
 const APPLE_SUBSCRIPTIONS_MANAGE_URL = 'https://apps.apple.com/account/subscriptions';
@@ -154,6 +156,7 @@ function inactiveSubscriptionHasPlanHistory(
 const Subscription = () => {
   const { colors, spacing } = useTheme();
   const styles = useStyles(colors, spacing);
+  const bottomPad = useSafeBottomPadding(16);
   const {
     products,
     plans: backendPlans,
@@ -324,7 +327,8 @@ const Subscription = () => {
   /** When StoreKit returns no products (sandbox delay, etc.), still list plans from GET /plans or local config */
   const premiumPlansToShow = useMemo(() => {
     if (Platform.OS !== 'ios') {
-      return [];
+      // Android: show catalog for transparency; purchase opens “coming soon”
+      return SUBSCRIPTION_PLANS.filter(p => p.type === 'premium');
     }
     if (premiumPlansFromStore.length > 0) {
       return premiumPlansFromStore;
@@ -342,7 +346,7 @@ const Subscription = () => {
 
   const familyPlansToShow = useMemo(() => {
     if (Platform.OS !== 'ios') {
-      return [];
+      return SUBSCRIPTION_PLANS.filter(p => p.type === 'family');
     }
     if (familyPlansFromStore.length > 0) {
       return familyPlansFromStore;
@@ -382,7 +386,10 @@ const Subscription = () => {
 
   const handlePurchase = async (productId: string) => {
     if (Platform.OS !== 'ios') {
-      Alert.alert('Not Available', 'Subscriptions are only available on iOS.');
+      Alert.alert(
+        'Coming soon on Android',
+        'Google Play subscriptions are being enabled for PetMood. Your trial limits still apply. Please check back after the next update, or subscribe from an iOS device if needed.',
+      );
       return;
     }
 
@@ -580,7 +587,10 @@ const Subscription = () => {
       <Header />
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: spacing.padding }}
+        contentContainerStyle={{
+          padding: spacing.padding,
+          paddingBottom: spacing.padding + bottomPad,
+        }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -823,7 +833,7 @@ const Subscription = () => {
                 color={colors.caption}
                 style={{ marginTop: 12, lineHeight: 18 }}
               >
-                Tier: {quotas.tier}
+                Tier: {humanizeQuotaTier(quotas.tier)}
                 {quotas.maxProfiles != null
                   ? ` · Profiles ${quotas.profilesUsed}/${quotas.maxProfiles}`
                   : ' · Unlimited profiles'}
@@ -921,9 +931,15 @@ const Subscription = () => {
         )}
 
         {Platform.OS !== 'ios' && (
-          <View style={[styles.statusCard, { backgroundColor: '#FFA50020' }]}>
-            <AppText color="#FFA500">
-              Subscriptions are only available on iOS devices.
+          <View style={[styles.statusCard, { backgroundColor: '#1C697120' }]}>
+            <AppText fontWeight="bold" style={{ marginBottom: 8 }}>
+              Android subscriptions
+            </AppText>
+            <AppText color={colors.caption} size={13} style={{ lineHeight: 20 }}>
+              Google Play billing for Premium and Family plans is being rolled out.
+              Your free account trial and scan limits from the server still apply on
+              Android. Full in-app purchase on Google Play will be available in a
+              coming update — you can view plan details below.
             </AppText>
           </View>
         )}
@@ -1046,7 +1062,7 @@ const Subscription = () => {
           )}
 
         {/* Premium Plans — from Store when available, else from GET /plans / local config */}
-        {Platform.OS === 'ios' && premiumPlansToShow.length > 0 && (
+        {premiumPlansToShow.length > 0 && (
             <>
         <AppText
           variant="subheading"
@@ -1177,7 +1193,7 @@ const Subscription = () => {
           )}
 
         {/* Family Plans */}
-        {Platform.OS === 'ios' && familyPlansToShow.length > 0 && (
+        {familyPlansToShow.length > 0 && (
             <>
         <AppText
           variant="subheading"

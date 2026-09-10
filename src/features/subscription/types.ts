@@ -2,7 +2,14 @@
  * Subscription Types
  */
 
-export type SubscriptionTier = 'none' | 'trial' | 'family' | 'premium';
+export type SubscriptionTier =
+  | 'account_trial'
+  | 'expired_locked'
+  | 'premium_storekit_trial'
+  | 'family_storekit_trial'
+  | 'premium'
+  | 'family'
+  | 'none';
 
 /** Backend-enforced limits from GET /api/subscriptions/status */
 export interface SubscriptionQuotas {
@@ -13,7 +20,8 @@ export interface SubscriptionQuotas {
   /** Remaining profiles that can be created; 0 = at cap */
   profilesRemaining: number | null;
   scansAllowed: boolean;
-  scansPerDay: number;
+  /** Daily scan cap; null = unlimited (paid plans) */
+  scansPerDay: number | null;
   scansUsedToday: number;
   /** Remaining scans today; null = unlimited */
   scansRemainingToday: number | null;
@@ -117,6 +125,11 @@ export interface SubscriptionPlan {
   limits?: {
     paid?: PlanLimitTier;
     trial?: PlanLimitTier;
+    accountTrial?: {
+      days?: number;
+      maxProfiles?: number;
+      scansPerDay?: number;
+    };
   };
 }
 
@@ -141,4 +154,29 @@ export interface CancelSubscriptionResponse {
 /** Backend error `code` values for quota / paywall routing */
 export type SubscriptionErrorCode =
   | 'subscription_required'
-  | 'profile_limit_reached';
+  | 'profile_limit_reached'
+  | 'daily_scan_limit_reached';
+
+/** POST /api/pets 403 — server-driven popup copy */
+export interface ProfileLimitErrorResponse {
+  detail?: string;
+  code?: 'profile_limit_reached';
+  limit?: number;
+  used?: number;
+  remaining?: number;
+  tier?: string;
+  title?: string;
+  message?: string;
+  buttons?: string[];
+}
+
+/** POST /api/scans 429 — daily scan limit */
+export interface DailyScanLimitErrorResponse {
+  detail?: string;
+  code?: 'daily_scan_limit_reached';
+  limit?: number;
+  used?: number;
+  remaining?: number;
+  resetsAt?: string;
+  tier?: string;
+}

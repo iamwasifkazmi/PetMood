@@ -1,9 +1,9 @@
 import React from 'react';
 import { Image, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import images from '../../../assets/images';
 import { Theme } from '../../../common/theme';
 import PrimaryButton from '../../../components/buttons/PrimaryButton';
+import ScreenSafeArea from '../../../components/layout/ScreenSafeArea';
 import { useTheme } from '../../../hooks/useTheme';
 import { RouteName, SplashProps } from '../../../navigation/types';
 
@@ -20,7 +20,7 @@ const Splash = ({ navigation }: SplashProps) => {
     }
   };
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.primary }}>
+    <ScreenSafeArea style={{ backgroundColor: colors.primary }}>
       <View style={styles.container}>
         <View style={styles.logoWrapper}>
           <Image
@@ -47,7 +47,7 @@ const Splash = ({ navigation }: SplashProps) => {
           />
         </View>
       </View>
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 };
 
@@ -70,7 +70,7 @@ const useStyles = (colors: Theme['colors'], fonts: Theme['fonts']) =>
       marginTop: 30,
     },
     buttonWrapper: {
-      marginBottom: 30,
+      marginBottom: 12,
       gap: 5,
     },
   });

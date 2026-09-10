@@ -35,16 +35,25 @@ const EmotionDetectionResults = ({
   // 4. Fallback to placeholder
   const getImageSource = () => {
     if (capturedImageUri) {
-      return { uri: capturedImageUri.startsWith('file://') ? capturedImageUri : `file://${capturedImageUri}` };
+      return {
+        uri: capturedImageUri.startsWith('file://')
+          ? capturedImageUri
+          : `file://${capturedImageUri}`,
+      };
     }
-    if (petScanResult?.mediaUrl && petScanResult.mediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+    if (
+      petScanResult?.mediaUrl &&
+      petScanResult.mediaUrl.match(/\.(jpg|jpeg|png|gif|webp|mp4|mov)$/i)
+    ) {
       return { uri: petScanResult.mediaUrl };
-    }
-    if (petScanResult?.pet?.image || petScanResult?.pet?.photoUrl) {
-      return { uri: petScanResult.pet.image || petScanResult.pet.photoUrl };
     }
     return images.pet_detail;
   };
+
+  const petName =
+    petScanResult?.pet?.name?.trim() ||
+    petScanResult?.animalType?.trim() ||
+    'Unknown';
   
   const recommendedText =
     typeof petScanResult?.recommended === 'string'
@@ -67,8 +76,7 @@ const EmotionDetectionResults = ({
         Data={[
           {
             label: 'Name',
-            categoryValue:
-              petScanResult?.animalType || petScanResult?.pet?.name,
+            categoryValue: petName,
             icon: icons.dog_icon2,
           },
           {
@@ -94,7 +102,7 @@ const EmotionDetectionResults = ({
           ...(recommendedText
             ? [
                 {
-                  label: 'Recommended',
+                  label: 'Suggestions',
                   categoryValue: recommendedText,
                   icon: icons.bulb,
                   suggestions: true,

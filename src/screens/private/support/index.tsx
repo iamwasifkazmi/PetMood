@@ -2,7 +2,6 @@ import { useFormik } from 'formik';
 import React, { useRef } from 'react';
 import { Image, StyleSheet, TextInput, View, Keyboard } from 'react-native';
 import { showMessage } from 'react-native-flash-message';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import icons from '../../../assets/icons/icons';
 import { Theme } from '../../../common/theme';
@@ -10,6 +9,7 @@ import AppText from '../../../components/Text/AppText';
 import PrimaryButton from '../../../components/buttons/PrimaryButton';
 import Header from '../../../components/header/Header';
 import PrimaryInput from '../../../components/inputs/PrimaryInput';
+import ScreenSafeArea from '../../../components/layout/ScreenSafeArea';
 import GlobalBottomSheet, {
   GlobalBottomSheetRef,
 } from '../../../components/views/GlobalBottomSheet';
@@ -68,9 +68,9 @@ const Support = () => {
   };
 
   return (
-    <SafeAreaView
+    <ScreenSafeArea
       edges={['bottom']}
-      style={{ flex: 1, backgroundColor: colors.background }}
+      style={{ backgroundColor: colors.background }}
     >
       <Header />
       <View style={{ padding: spacing.padding, flex: 1 }}>
@@ -134,7 +134,7 @@ const Support = () => {
         </AppText>
         <PrimaryButton title={'Okay'} onPress={handleOkay} />
       </GlobalBottomSheet>
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 };
 

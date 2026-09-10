@@ -4,6 +4,7 @@ import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
 import icons from '../assets/icons/icons';
 import AppText from '../components/Text/AppText';
 import { useTheme } from '../hooks/useTheme';
+import { useSafeBottomPadding } from '../hooks/useSafeBottomPadding';
 import { RootState, useAppSelector } from '../features/store';
 
 const tabIcons = {
@@ -20,16 +21,25 @@ const BottomTabBar: React.FC<BottomTabBarProps> = ({
   navigation,
 }) => {
   const { colors } = useTheme();
+  const bottomPad = useSafeBottomPadding(4);
   const isTabBarVisible = useAppSelector(
     (state: RootState) => state.tabBar.isVisible,
-  ); // Get visibility from Redux
+  );
 
   if (!isTabBarVisible) {
     return null;
   }
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        {
+          paddingBottom: bottomPad,
+          borderTopColor: colors.border,
+        },
+      ]}
+    >
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key];
         const isFocused = state.index === index;
@@ -60,6 +70,9 @@ const BottomTabBar: React.FC<BottomTabBarProps> = ({
             key={route.key}
             onPress={onPress}
             style={styles.tab}
+            accessibilityRole="button"
+            accessibilityState={isFocused ? { selected: true } : {}}
+            accessibilityLabel={options.tabBarAccessibilityLabel ?? route.name}
           >
             <Image
               source={tabIcons[route.name as keyof typeof tabIcons]}
@@ -93,12 +106,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     paddingHorizontal: 10,
     paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 30,
   },
   icon: {
     width: 26,
@@ -115,7 +128,7 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 30,
+    marginTop: -20,
   },
   scannerIcon: {
     width: 28,

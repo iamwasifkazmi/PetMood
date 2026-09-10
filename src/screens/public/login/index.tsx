@@ -1,7 +1,8 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Keyboard,
   NativeSyntheticEvent,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -10,9 +11,7 @@ import {
   View,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFormik } from 'formik';
-import { showMessage } from 'react-native-flash-message';
 
 import icons from '../../../assets/icons/icons';
 import { Theme } from '../../../common/theme';
@@ -20,11 +19,12 @@ import PrimaryButton from '../../../components/buttons/PrimaryButton';
 import PrimaryInput from '../../../components/inputs/PrimaryInput';
 import AppText from '../../../components/Text/AppText';
 import LogoView from '../../../components/views/LogoView';
+import ScreenSafeArea from '../../../components/layout/ScreenSafeArea';
 import { useTheme } from '../../../hooks/useTheme';
 import { LoginProps, RouteName } from '../../../navigation/types';
 import { useLoginMutation } from '../../../features/auth/authApiSlice';
 import { loginSchema } from '../../../utils/validations';
-import { showErrMsg, showSuccessMsg } from '../../../utils/flashMessage';
+import { showSuccessMsg } from '../../../utils/flashMessage';
 import { store } from '../../../features/store';
 import { setAuthSession } from '../../../features/auth/authSlice';
 
@@ -33,6 +33,13 @@ const Login = ({ navigation }: LoginProps) => {
   const styles = useStyles(colors, fonts, spacing);
 
   const [login, { isLoading }] = useLoginMutation();
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  const emailInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  const emailDraftRef = useRef('');
+  const passwordDraftRef = useRef('');
 
   const attemptLogin = async (
     email: string,
@@ -54,8 +61,7 @@ const Login = ({ navigation }: LoginProps) => {
         !refreshToken ||
         typeof refreshToken !== 'string'
       ) {
-        console.error('Login response missing tokens', res);
-        showErrMsg(
+        setLoginError(
           'Could not complete sign-in (no token from server). Please try again.',
         );
         return;
@@ -69,74 +75,91 @@ const Login = ({ navigation }: LoginProps) => {
         }),
       );
       resetForm();
+      setLoginError(null);
       showSuccessMsg('Login successful!');
-    } catch (err: any) {
-      const alreadyShownByAxios = err?.status != null || err?.data != null;
-      if (!alreadyShownByAxios) {
-        const msg =
-          typeof err?.message === 'string' ? err.message : 'Sign in failed.';
-        showErrMsg(msg);
-      }
-      console.error('Login error', err);
+    } catch (err: unknown) {
+      const alreadyShownByAxios =
+        err &&
+        typeof err === 'object' &&
+        ('status' in err || 'data' in err);
+      const message = alreadyShownByAxios
+        ? 'Please enter valid credentials.'
+        : typeof (err as { message?: string })?.message === 'string'
+          ? (err as { message: string }).message
+          : 'Please enter valid credentials.';
+      setLoginError(message);
+      // Field-level error only — axios already suppresses Identity Toolkit toasts
     }
   };
 
-  const emailInputRef = useRef<TextInput>(null);
-  const passwordInputRef = useRef<TextInput>(null);
-  /** iOS Keychain/AutoFill can show text before React state updates; keep last known strings for submit. */
-  const emailDraftRef = useRef('');
-  const passwordDraftRef = useRef('');
-
   const formik = useFormik({
-    initialValues: {
-      email: '',
-      password: '',
-    },
+    initialValues: { email: '', password: '' },
     validationSchema: loginSchema,
-    validateOnMount: false,
+    validateOnChange: true,
+    validateOnBlur: true,
     onSubmit: async (values, { resetForm }) => {
       await attemptLogin(values.email, values.password, resetForm);
     },
   });
 
-  const handleLogin = () => {
-    if (isLoading) {
-      return;
+  const showError = (field: 'email' | 'password') => {
+    if (field === 'email' && loginError && !formik.values.email.trim()) {
+      return loginError;
     }
-    // Dismiss focus so iOS commits Keychain/AutoFill into the native field and fires onChange* once.
+    if (
+      (submitAttempted || formik.touched[field]) &&
+      formik.errors[field]
+    ) {
+      return formik.errors[field];
+    }
+    if (field === 'password' && loginError && submitAttempted) {
+      return loginError;
+    }
+    return undefined;
+  };
+
+  const handleLogin = () => {
+    if (isLoading) return;
+
     passwordInputRef.current?.blur();
     emailInputRef.current?.blur();
     Keyboard.dismiss();
-    // One tick of delay so native value syncs to JS before we validate and submit.
+
     setTimeout(() => {
       const email = (emailDraftRef.current || formik.values.email).trim();
       const password = passwordDraftRef.current || formik.values.password;
 
+      setSubmitAttempted(true);
+      formik.setValues({ email, password }, false);
+      formik.setTouched({ email: true, password: true });
+
       void (async () => {
         try {
-          await loginSchema.validate({ email, password });
+          await loginSchema.validate({ email, password }, { abortEarly: false });
+          setLoginError(null);
+          await attemptLogin(email, password, formik.resetForm);
         } catch (e: unknown) {
-          const msg = getYupFirstError(e) ?? 'Check your input';
-          showMessage({ message: msg, type: 'danger' });
-          return;
+          if (e && typeof e === 'object' && 'inner' in e) {
+            const inner = (e as { inner?: { path?: string; message?: string }[] })
+              .inner;
+            inner?.forEach(item => {
+              if (item.path === 'email' || item.path === 'password') {
+                formik.setFieldError(item.path, item.message);
+              }
+            });
+          }
         }
-        formik.setValues({ email, password }, false);
-        await attemptLogin(email, password, formik.resetForm);
       })();
     }, 100);
   };
 
-  const handleResetPassword = () => {
-    navigation.navigate(RouteName.ResetPassword);
-  };
-
-  /** iOS/Android autofill: prefer native `text` so Formik state matches the visible field. */
   const syncEmailFromNativeChange = (
     e: NativeSyntheticEvent<TextInputChangeEventData>,
   ) => {
     const text = e.nativeEvent.text;
     if (text !== undefined) {
       emailDraftRef.current = text;
+      setLoginError(null);
       if (text !== formik.values.email) {
         formik.setFieldValue('email', text, false);
       }
@@ -149,6 +172,7 @@ const Login = ({ navigation }: LoginProps) => {
     const text = e.nativeEvent.text;
     if (text !== undefined) {
       passwordDraftRef.current = text;
+      setLoginError(null);
       if (text !== formik.values.password) {
         formik.setFieldValue('password', text, false);
       }
@@ -156,60 +180,71 @@ const Login = ({ navigation }: LoginProps) => {
   };
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.primary }}
-      edges={['top']}
-    >
-      <View
-        style={{ paddingTop: 60, justifyContent: 'space-between', flex: 1 }}
-      >
+    <ScreenSafeArea style={{ backgroundColor: colors.primary }}>
+      <View style={{ paddingTop: 60, flex: 1 }}>
         <LogoView />
         <KeyboardAwareScrollView
           style={styles.bottomView}
+          contentContainerStyle={{ paddingBottom: 72, flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          enableOnAndroid
+          enableAutomaticScroll
+          extraScrollHeight={Platform.OS === 'android' ? 100 : 40}
+          extraHeight={Platform.OS === 'android' ? 140 : 60}
+          keyboardOpeningTime={0}
+          enableResetScrollToCoords={false}
         >
           <Text style={styles.title}>Sign In To Your Account</Text>
 
-          <View style={{ gap: 12 }}>
+          <View style={{ gap: 4 }}>
             <PrimaryInput
               ref={emailInputRef}
               leftImageSource={icons.email}
               placeholder="Email"
+              required
               keyboardType="email-address"
               value={formik.values.email}
               onChangeText={text => {
                 emailDraftRef.current = text;
+                setLoginError(null);
                 formik.handleChange('email')(text);
               }}
+              onBlur={formik.handleBlur('email')}
               onChange={syncEmailFromNativeChange}
               autoCapitalize="none"
               autoCorrect={false}
               textContentType="username"
               autoComplete="email"
               importantForAutofill="yes"
+              error={showError('email')}
             />
 
             <PrimaryInput
               ref={passwordInputRef}
               leftImageSource={icons.lock}
               placeholder="Password"
+              required
               secureTextEntry
               iconColor={colors.primary}
               value={formik.values.password}
               onChangeText={text => {
                 passwordDraftRef.current = text;
+                setLoginError(null);
                 formik.handleChange('password')(text);
               }}
+              onBlur={formik.handleBlur('password')}
               onChange={syncPasswordFromNativeChange}
               textContentType="password"
               autoComplete="password"
               importantForAutofill="yes"
+              error={showError('password')}
             />
           </View>
 
           <TouchableOpacity
             style={{ alignSelf: 'flex-end', marginTop: 16 }}
-            onPress={handleResetPassword}
+            onPress={() => navigation.navigate(RouteName.ResetPassword)}
           >
             <AppText
               variant="heading"
@@ -220,7 +255,7 @@ const Login = ({ navigation }: LoginProps) => {
             </AppText>
           </TouchableOpacity>
 
-          <View style={{ marginTop: 24, marginBottom: 20 }}>
+          <View style={{ marginTop: 24 }}>
             <PrimaryButton
               onPress={handleLogin}
               title="Sign In"
@@ -234,9 +269,7 @@ const Login = ({ navigation }: LoginProps) => {
             >
               Don’t have an account?
               <AppText
-                onPress={() => {
-                  navigation.navigate(RouteName.CreateAccount);
-                }}
+                onPress={() => navigation.navigate(RouteName.CreateAccount)}
                 variant="heading"
                 style={{ fontSize: 14 }}
                 color={colors.primary}
@@ -245,46 +278,12 @@ const Login = ({ navigation }: LoginProps) => {
                 Sign Up
               </AppText>
             </AppText>
-
-            {/* <View style={styles.orContainer}>
-              <View style={styles.orLine} />
-              <Text style={styles.orText}>OR</Text>
-              <View style={styles.orLine} />
-            </View> */}
-            {/* 
-            <TouchableOpacity style={styles.socialButton}>
-              <Image source={icons.google} style={styles.googleLogo} />
-              <AppText variant="heading" style={styles.socialButtonText}>
-                Sign In with Google
-              </AppText>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.socialButton}>
-              <Image source={icons.apple} style={styles.googleLogo} />
-              <AppText variant="heading" style={styles.socialButtonText}>
-                Sign In with Apple
-              </AppText>
-            </TouchableOpacity> */}
           </View>
         </KeyboardAwareScrollView>
       </View>
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 };
-
-function getYupFirstError(e: unknown): string | null {
-  if (e && typeof e === 'object') {
-    const inner = (e as { inner?: { message?: string }[] }).inner;
-    if (Array.isArray(inner) && inner[0]?.message) {
-      return inner[0].message;
-    }
-    const err = (e as { errors?: string[] }).errors;
-    if (Array.isArray(err) && err[0]) {
-      return err[0];
-    }
-  }
-  return null;
-}
 
 export default Login;
 
@@ -299,8 +298,8 @@ const useStyles = (
       padding: spacing.padding,
       borderTopEndRadius: 50,
       borderTopStartRadius: 50,
-      paddingBottom: 40,
       marginTop: 40,
+      flex: 1,
     },
     title: {
       fontSize: 24,
@@ -308,39 +307,5 @@ const useStyles = (
       color: colors.text,
       ...fonts.semiBold,
       marginBottom: 16,
-    },
-    orContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginVertical: 20,
-    },
-    orLine: {
-      flex: 1,
-      height: 1,
-      backgroundColor: '#DBDFE1',
-    },
-    orText: {
-      marginHorizontal: 10,
-      ...fonts.regular,
-      color: colors.text,
-    },
-    socialButton: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 50,
-      paddingVertical: 12,
-      alignItems: 'center',
-      marginBottom: 12,
-      flexDirection: 'row',
-      justifyContent: 'center',
-      gap: 12,
-    },
-    googleLogo: {
-      width: 24,
-      height: 24,
-      resizeMode: 'contain',
-    },
-    socialButtonText: {
-      fontSize: 14,
     },
   });

@@ -50,7 +50,7 @@ import { showErrMsg, showSuccessMsg } from '../../../utils/flashMessage';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../../features/store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import ScreenSafeArea from '../../../components/layout/ScreenSafeArea';
 import {
   PRIVACY_POLICY_WEB_URL,
   TERMS_AND_CONDITIONS_URL,
@@ -419,10 +419,7 @@ const Community = ({ navigation }: CommunityProps) => {
   if (ugcTermsAccepted === false) {
     return (
       <Modal visible animationType="slide" presentationStyle="fullScreen">
-        <SafeAreaView
-          style={{ flex: 1, backgroundColor: colors.background }}
-          edges={['top', 'bottom']}
-        >
+        <ScreenSafeArea style={{ backgroundColor: colors.background }}>
           <ScrollView
             contentContainerStyle={{ padding: 24, paddingBottom: 48 }}
             keyboardShouldPersistTaps="handled"
@@ -458,7 +455,7 @@ const Community = ({ navigation }: CommunityProps) => {
               onPress={handleDeclineUgcTerms}
             />
           </ScrollView>
-        </SafeAreaView>
+        </ScreenSafeArea>
       </Modal>
     );
   }

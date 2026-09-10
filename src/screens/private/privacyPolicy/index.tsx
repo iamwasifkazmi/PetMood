@@ -1,9 +1,9 @@
 import React from 'react';
 import { Linking, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Theme } from '../../../common/theme';
 import AppText from '../../../components/Text/AppText';
 import Header from '../../../components/header/Header';
+import ScreenSafeArea from '../../../components/layout/ScreenSafeArea';
 import { useTheme } from '../../../hooks/useTheme';
 import CardView from '../../../components/cards/CardView';
 import {
@@ -21,9 +21,9 @@ const PrivacyPolicy = () => {
   };
 
   return (
-    <SafeAreaView
+    <ScreenSafeArea
       edges={['bottom']}
-      style={{ flex: 1, backgroundColor: colors.background }}
+      style={{ backgroundColor: colors.background }}
     >
       <Header />
       <ScrollView
@@ -181,7 +181,7 @@ const PrivacyPolicy = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 };
 

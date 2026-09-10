@@ -5,6 +5,7 @@ import images from '../../../assets/images';
 import { Theme } from '../../../common/theme';
 import PrimaryButton from '../../../components/buttons/PrimaryButton';
 import { useTheme } from '../../../hooks/useTheme';
+import { useSafeBottomPadding } from '../../../hooks/useSafeBottomPadding';
 import { OnboardingProps, RouteName } from '../../../navigation/types';
 
 const slides = [
@@ -33,7 +34,8 @@ const slides = [
 
 const Onboarding = ({ navigation }: OnboardingProps) => {
   const { colors, fonts } = useTheme();
-  const styles = useStyles(colors, fonts);
+  const bottomPad = useSafeBottomPadding(20);
+  const styles = useStyles(colors, fonts, bottomPad);
   const swiperRef = useRef<Swiper>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -86,8 +88,7 @@ const Onboarding = ({ navigation }: OnboardingProps) => {
           ))}
         </View>
 
-        {/* Buttons */}
-        <View style={{ marginBottom: 20 }}>
+        <View style={{ marginBottom: 8 }}>
           <PrimaryButton
             title={activeIndex === slides.length - 1 ? 'Get Started' : 'Next'}
             onPress={handleNext}
@@ -114,7 +115,11 @@ const Onboarding = ({ navigation }: OnboardingProps) => {
 
 export default Onboarding;
 
-const useStyles = (colors: Theme['colors'], fonts: Theme['fonts']) =>
+const useStyles = (
+  colors: Theme['colors'],
+  fonts: Theme['fonts'],
+  bottomPad: number,
+) =>
   StyleSheet.create({
     bottomView: {
       position: 'absolute',
@@ -123,9 +128,10 @@ const useStyles = (colors: Theme['colors'], fonts: Theme['fonts']) =>
       right: 0,
       backgroundColor: colors.card,
       padding: 20,
+      paddingBottom: bottomPad + 8,
       borderTopLeftRadius: 30,
       borderTopRightRadius: 30,
-      height: 370,
+      minHeight: 370,
       justifyContent: 'space-between',
     },
     title: {

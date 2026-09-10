@@ -11,22 +11,76 @@ export const scanningApiSlice = createApi({
     // 🔹 POST - Upload pet scan (image/audio/video)
     scanPet: build.mutation<CreateScanRes, CreateScanArg>({
       query: ({ petId, mediaType, file }) => {
+        const rawUri = file.uri ?? file.path ?? file;
+        let uri = typeof rawUri === 'string' ? rawUri : String(rawUri);
+        // content:// and http(s) must stay as-is; absolute paths need file://
+        if (
+          uri &&
+          !uri.startsWith('file://') &&
+          !uri.startsWith('content://') &&
+          !uri.startsWith('http://') &&
+          !uri.startsWith('https://')
+        ) {
+          uri = `file://${uri}`;
+        }
+
+        const mimeByMedia: Record<CreateScanArg['mediaType'], string> = {
+          audio: 'audio/m4a',
+          video: 'video/mp4',
+          image: 'image/jpeg',
+        };
+
+        const nameByMedia: Record<CreateScanArg['mediaType'], string> = {
+          audio: 'pet_audio.m4a',
+          video: 'pet_video.mp4',
+          image: 'pet_image.jpg',
+        };
+
+        let mime = String(
+          file.type || file.mime || mimeByMedia[mediaType],
+        ).toLowerCase();
+        // Strip codec params (e.g. video/mp4; codecs=...) — many servers reject them
+        mime = mime.split(';')[0].trim();
+        if (mediaType === 'video' && (!mime || mime === 'application/octet-stream')) {
+          mime = 'video/mp4';
+        }
+        if (mediaType === 'audio' && (!mime || mime === 'application/octet-stream')) {
+          mime = 'audio/m4a';
+        }
+        if (mediaType === 'image' && (!mime || mime === 'application/octet-stream')) {
+          mime = 'image/jpeg';
+        }
+
+        let name = file.name ?? file.fileName ?? nameByMedia[mediaType];
+        if (typeof name !== 'string' || !name.trim()) {
+          name = nameByMedia[mediaType];
+        }
+        // Ensure extension matches media type (Android often omits filename)
+        if (mediaType === 'video' && !/\.(mp4|mov|m4v|3gp|webm)$/i.test(name)) {
+          name = `${name.replace(/\.[^.]+$/, '') || 'pet_video'}.mp4`;
+        }
+        if (mediaType === 'audio' && !/\.(m4a|mp3|wav|aac|caf)$/i.test(name)) {
+          name = `${name.replace(/\.[^.]+$/, '') || 'pet_audio'}.m4a`;
+        }
+        if (mediaType === 'image' && !/\.(jpe?g|png|webp|heic)$/i.test(name)) {
+          name = `${name.replace(/\.[^.]+$/, '') || 'pet_image'}.jpg`;
+        }
+
         const formData = new FormData();
         formData.append('petId', String(petId));
         formData.append('mediaType', mediaType);
         formData.append('file', {
-          uri: file.uri ?? file.path ?? file,
-          name: file.fileName ?? 'upload.jpg',
-          type: file.mime ?? 'image/jpeg',
-        });
+          uri,
+          name,
+          type: mime,
+        } as any);
 
         return {
           url: 'scans',
           method: 'POST',
           data: formData,
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
+          // Do NOT set Content-Type — RN/axios must add multipart boundary
+          timeout: 180000,
         };
       },
       invalidatesTags: ['Scans'],

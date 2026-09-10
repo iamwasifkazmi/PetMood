@@ -17,13 +17,12 @@ import {
   ViewStyle,
 } from 'react-native';
 import Animated, {
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withTiming,
 } from 'react-native-reanimated';
 import Feather from 'react-native-vector-icons/Feather';
 import { useTheme } from '../hooks/useTheme';
+import { useSafeBottomPadding } from '../hooks/useSafeBottomPadding';
 import AppText from './Text/AppText';
 import PrimaryButton from './buttons/PrimaryButton';
 
@@ -55,6 +54,7 @@ const DatePicker: React.FC<DatePickerProps> = ({
   formatDate,
 }) => {
   const { colors, fonts } = useTheme();
+  const bottomPad = useSafeBottomPadding(12);
   const [isOpen, setIsOpen] = useState(false);
   const [tempDate, setTempDate] = useState<Date>(value || new Date());
   const opacity = useSharedValue(0);
@@ -66,13 +66,12 @@ const DatePicker: React.FC<DatePickerProps> = ({
   const handleOpen = () => {
     setTempDate(value || new Date());
     setIsOpen(true);
-    opacity.value = withTiming(1, { duration: 200 });
+    opacity.value = 1;
   };
 
   const handleClose = () => {
-    opacity.value = withTiming(0, { duration: 150 }, () => {
-      runOnJS(setIsOpen)(false);
-    });
+    setIsOpen(false);
+    opacity.value = 0;
   };
 
   const handleConfirm = () => {
@@ -80,7 +79,24 @@ const DatePicker: React.FC<DatePickerProps> = ({
     handleClose();
   };
 
-  const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+  const handleAndroidChange = (
+    event: DateTimePickerEvent,
+    selectedDate?: Date,
+  ) => {
+    // Android system dialog — close our flag so we don't keep a second UI open
+    setIsOpen(false);
+    if (event.type === 'dismissed') {
+      return;
+    }
+    if (selectedDate) {
+      onDateChange(selectedDate);
+    }
+  };
+
+  const handleIosChange = (
+    _event: DateTimePickerEvent,
+    selectedDate?: Date,
+  ) => {
     if (selectedDate) {
       setTempDate(selectedDate);
     }
@@ -149,7 +165,7 @@ const DatePicker: React.FC<DatePickerProps> = ({
       backgroundColor: colors.card,
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
-      paddingBottom: 20,
+      paddingBottom: bottomPad,
     },
     modalHeader: {
       flexDirection: 'row',
@@ -181,6 +197,14 @@ const DatePicker: React.FC<DatePickerProps> = ({
     buttonContainer: {
       paddingHorizontal: 20,
       paddingTop: 16,
+      flexDirection: 'row',
+      gap: 12,
+    },
+    cancelButton: {
+      flex: 1,
+    },
+    confirmButton: {
+      flex: 1,
     },
   });
 
@@ -216,60 +240,78 @@ const DatePicker: React.FC<DatePickerProps> = ({
         </View>
       </Pressable>
 
-      <Modal
-        visible={isOpen}
-        transparent
-        animationType="none"
-        onRequestClose={handleClose}
-      >
-        <Animated.View style={[styles.modalOverlay, animatedModalStyle]}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={handleClose}
-          />
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <AppText style={styles.modalTitle} variant="subheading">
-                {placeholder}
-              </AppText>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={handleClose}
-              >
-                <Feather name="x" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
+      {/* Android: native dialog only — avoids double calendar + custom sheet */}
+      {Platform.OS === 'android' && isOpen ? (
+        <DateTimePicker
+          value={tempDate}
+          mode="date"
+          display="default"
+          maximumDate={maximumDate}
+          minimumDate={minimumDate}
+          onChange={handleAndroidChange}
+        />
+      ) : null}
 
-            <View style={styles.pickerContainer}>
-              <DateTimePicker
-                value={tempDate}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                maximumDate={maximumDate}
-                minimumDate={minimumDate}
-                onChange={handleDateChange}
-                style={Platform.OS === 'ios' ? styles.iosPicker : undefined}
-                {...(Platform.OS === 'ios'
-                  ? {
-                      // Modal sheet is light; without this, iOS Dark Mode uses white
-                      // picker text on a white background (invisible on some devices).
-                      themeVariant: 'light' as const,
-                      textColor: colors.text,
-                    }
-                  : {})}
-              />
-            </View>
+      {/* iOS: custom bottom sheet with spinner + Cancel/Confirm */}
+      {Platform.OS === 'ios' ? (
+        <Modal
+          visible={isOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={handleClose}
+        >
+          <Animated.View style={[styles.modalOverlay, animatedModalStyle]}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={handleClose}
+            />
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <AppText style={styles.modalTitle} variant="subheading">
+                  {placeholder}
+                </AppText>
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={handleClose}
+                >
+                  <Feather name="x" size={24} color={colors.text} />
+                </TouchableOpacity>
+              </View>
 
-            <View style={styles.buttonContainer}>
-              <PrimaryButton title="Confirm" onPress={handleConfirm} />
+              <View style={styles.pickerContainer}>
+                <DateTimePicker
+                  value={tempDate}
+                  mode="date"
+                  display="spinner"
+                  maximumDate={maximumDate}
+                  minimumDate={minimumDate}
+                  onChange={handleIosChange}
+                  style={styles.iosPicker}
+                  themeVariant="light"
+                  textColor={colors.text}
+                />
+              </View>
+
+              <View style={styles.buttonContainer}>
+                <PrimaryButton
+                  type="outlined"
+                  title="Cancel"
+                  onPress={handleClose}
+                  style={styles.cancelButton}
+                />
+                <PrimaryButton
+                  title="Confirm"
+                  onPress={handleConfirm}
+                  style={styles.confirmButton}
+                />
+              </View>
             </View>
-          </View>
-        </Animated.View>
-      </Modal>
+          </Animated.View>
+        </Modal>
+      ) : null}
     </View>
   );
 };
 
 export default DatePicker;
-
