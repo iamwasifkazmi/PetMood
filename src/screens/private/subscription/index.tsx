@@ -388,7 +388,7 @@ const Subscription = () => {
     if (Platform.OS !== 'ios') {
       Alert.alert(
         'Coming soon on Android',
-        'Google Play subscriptions are being enabled for PetMood. Your trial limits still apply. Please check back after the next update, or subscribe from an iOS device if needed.',
+        'Google Play subscriptions are being enabled for AIPetMood. Your trial limits still apply. Please check back after the next update, or subscribe from an iOS device if needed.',
       );
       return;
     }
@@ -727,7 +727,7 @@ const Subscription = () => {
                   color={colors.caption}
                   style={{ marginTop: 8, lineHeight: 15 }}
                 >
-                  Opens Apple’s subscription management. PetMood cannot cancel Apple
+                  Opens Apple’s subscription management. AIPetMood cannot cancel Apple
                   billing for you.
                 </AppText>
               </>
@@ -959,7 +959,7 @@ const Subscription = () => {
               automatically at the plan price until you cancel.{'\n'}
               • The introductory trial is available only once per eligible subscriber, per
               Apple’s rules.{'\n'}
-              • To cancel: Settings → your name → Subscriptions → PetMood → Cancel
+              • To cancel: Settings → your name → Subscriptions → AIPetMood → Cancel
               Subscription.
             </AppText>
             <TouchableOpacity

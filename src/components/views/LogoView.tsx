@@ -6,7 +6,7 @@ const LogoView = () => {
   return (
     <Image
       source={images.logo}
-      style={{ width: 156, height: 152, alignSelf: 'center' }}
+      style={{ width: 180, height: 120, alignSelf: 'center' }}
       resizeMode="contain"
     />
   );

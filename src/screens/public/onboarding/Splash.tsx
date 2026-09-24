@@ -65,8 +65,8 @@ const useStyles = (colors: Theme['colors'], fonts: Theme['fonts']) =>
       alignItems: 'center',
     },
     logo: {
-      width: 200,
-      height: 194,
+      width: 220,
+      height: 140,
       marginTop: 30,
     },
     buttonWrapper: {

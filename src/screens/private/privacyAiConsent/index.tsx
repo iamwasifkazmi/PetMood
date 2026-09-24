@@ -126,7 +126,7 @@ const PrivacyAiConsentScreen = () => {
           AI analysis consent
         </AppText>
         <AppText size={14} color={colors.caption} style={{ marginBottom: 20 }}>
-          Control whether PetMood may send your photo or audio to third-party AI
+          Control whether AIPetMood may send your photo or audio to third-party AI
           providers for emotion detection. You can grant or revoke access at any time.
         </AppText>
 

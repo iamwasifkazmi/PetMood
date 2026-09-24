@@ -48,7 +48,7 @@ const Header = () => {
           >
             <Image source={images.simple_logo} style={styles.logo} />
             <AppText color={colors.card} variant="subheading">
-              PetMood
+              AIPetMood
             </AppText>
           </Pressable>
         </View>
@@ -92,8 +92,9 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
   },
   logo: {
-    width: 40,
-    height: 30,
+    width: 36,
+    height: 36,
     resizeMode: 'contain',
+    borderRadius: 8,
   },
 });

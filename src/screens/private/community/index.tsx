@@ -428,7 +428,7 @@ const Community = ({ navigation }: CommunityProps) => {
               Community guidelines & terms
             </AppText>
             <AppText color={colors.caption} style={{ marginBottom: 16, lineHeight: 22 }}>
-              PetMood Community includes user-generated content. Before you continue, please
+              AIPetMood Community includes user-generated content. Before you continue, please
               review our Privacy Policy and Terms of Use (EULA). By tapping &quot;I agree and
               continue&quot;, you agree to these terms and our community rules.
             </AppText>

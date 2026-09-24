@@ -1,4 +1,4 @@
-package com.petmood
+package com.aipetmood
 
 import android.app.Application
 import com.facebook.react.PackageList

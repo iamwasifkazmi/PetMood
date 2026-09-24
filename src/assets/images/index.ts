@@ -1,8 +1,8 @@
 export default {
-  logo: require('./logo.png'),
+  logo: require('./aiptmood-logo.jpeg'),
 
   dog_rounded: require('./dog_rounded.png'),
-  simple_logo: require('./simple_logo.png'),
+  simple_logo: require('./aiptmood-logo.jpeg'),
   pet_group: require('./pet_group.png'),
   gallery_rounded: require('./gallery_rounded.png'),
   pet_detail: require('./pet_detail.png'),
