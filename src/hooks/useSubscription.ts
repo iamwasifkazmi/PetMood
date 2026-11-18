@@ -1,26 +1,34 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
+import { Product } from 'react-native-iap';
 import { subscriptionService } from '../services/subscriptionService';
 import { useAppSelector } from '../features/store';
 import {
   useGetPlansQuery,
   useGetSubscriptionStatusQuery,
 } from '../features/subscription/subscriptionApiSlice';
-import { Product } from 'react-native-iap';
 import {
   canAddPetProfile,
   canStartScan,
   DEFAULT_QUOTAS,
 } from '../utils/subscriptionQuotas';
+import { resolveDbUserId } from '../services/revenueCatAndroid';
+import type { RevenueCatStoreProductLike } from '../services/revenueCatAndroid';
 
 /**
  * Hook for managing subscriptions + quotas (backend source of truth)
+ * iOS: StoreKit / react-native-iap
+ * Android: RevenueCat Purchases
  */
 export const useSubscription = () => {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<(Product | RevenueCatStoreProductLike)[]>(
+    [],
+  );
   const [isInitialized, setIsInitialized] = useState(false);
   const isLoading = useAppSelector(state => state.subscription?.isLoading);
   const error = useAppSelector(state => state.subscription?.error);
+  const user = useAppSelector(state => state.user?.user);
+  const dbUserId = resolveDbUserId(user);
 
   const {
     data: plansData,
@@ -51,30 +59,63 @@ export const useSubscription = () => {
   );
 
   useEffect(() => {
-    if (Platform.OS !== 'ios') {
-      return;
+    if (Platform.OS === 'ios') {
+      const init = async () => {
+        try {
+          const initialized = await subscriptionService.initialize();
+          if (initialized) {
+            setIsInitialized(true);
+            const availableProducts =
+              await subscriptionService.getAvailableProducts();
+            setProducts(availableProducts);
+          }
+        } catch (err) {
+          console.error('Failed to initialize subscription service:', err);
+        }
+      };
+
+      void init();
+
+      return () => {
+        subscriptionService.cleanup();
+      };
     }
 
-    const init = async () => {
-      try {
-        const initialized = await subscriptionService.initialize();
-        if (initialized) {
-          setIsInitialized(true);
-          const availableProducts =
-            await subscriptionService.getAvailableProducts();
-          setProducts(availableProducts);
-        }
-      } catch (err) {
-        console.error('Failed to initialize subscription service:', err);
+    if (Platform.OS === 'android') {
+      if (!dbUserId) {
+        setIsInitialized(false);
+        setProducts([]);
+        return;
       }
-    };
 
-    init();
+      let cancelled = false;
+      const init = async () => {
+        try {
+          const initialized = await subscriptionService.initialize(dbUserId);
+          if (cancelled) {
+            return;
+          }
+          if (initialized) {
+            setIsInitialized(true);
+            const availableProducts =
+              await subscriptionService.getAvailableProducts();
+            if (!cancelled) {
+              setProducts(availableProducts);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to initialize Android RevenueCat:', err);
+        }
+      };
 
-    return () => {
-      subscriptionService.cleanup();
-    };
-  }, []);
+      void init();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    return undefined;
+  }, [dbUserId]);
 
   const purchaseSubscription = async (productId: string) => {
     try {
@@ -94,24 +135,29 @@ export const useSubscription = () => {
   };
 
   const refreshStoreProducts = useCallback(async () => {
-    if (Platform.OS !== 'ios') {
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+      return;
+    }
+    if (Platform.OS === 'android' && !dbUserId) {
       return;
     }
     try {
       const available = await subscriptionService.getAvailableProducts();
       setProducts(available);
     } catch (e) {
-      console.error('Failed to refresh App Store products:', e);
+      console.error('Failed to refresh store products:', e);
     }
-  }, []);
+  }, [dbUserId]);
 
   const refreshAll = useCallback(async () => {
     await Promise.all([refetchPlans(), refetchSubscriptionStatus()]);
-    if (Platform.OS !== 'ios') {
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
       return;
     }
     try {
-      const ok = await subscriptionService.initialize();
+      const ok = await subscriptionService.initialize(
+        Platform.OS === 'android' ? dbUserId : undefined,
+      );
       if (ok) {
         setIsInitialized(true);
       }
@@ -119,7 +165,7 @@ export const useSubscription = () => {
     } catch (e) {
       console.error('refreshAll IAP', e);
     }
-  }, [refetchPlans, refetchSubscriptionStatus, refreshStoreProducts]);
+  }, [refetchPlans, refetchSubscriptionStatus, refreshStoreProducts, dbUserId]);
 
   const quotaFlags = useMemo(() => {
     const q = quotas ?? DEFAULT_QUOTAS;

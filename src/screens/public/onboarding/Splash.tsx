@@ -25,7 +25,7 @@ const Splash = ({ navigation }: SplashProps) => {
         <View style={styles.logoWrapper}>
           <Image
             style={styles.logo}
-            source={images.logo}
+            source={images.aipetmood_icon}
             resizeMode="contain"
           />
         </View>
@@ -65,9 +65,10 @@ const useStyles = (colors: Theme['colors'], fonts: Theme['fonts']) =>
       alignItems: 'center',
     },
     logo: {
-      width: 220,
-      height: 140,
+      width: 160,
+      height: 160,
       marginTop: 30,
+      borderRadius: 24,
     },
     buttonWrapper: {
       marginBottom: 12,

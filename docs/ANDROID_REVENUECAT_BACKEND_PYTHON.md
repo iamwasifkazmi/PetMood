@@ -1,22 +1,36 @@
-# Android In-App Purchases — Backend (Python) with RevenueCat
+# Android IAP — Backend (Python) + RevenueCat
 
-This document describes what the **PetMood Python backend** should do to support **Google Play** subscriptions via **RevenueCat**, while keeping the same entitlement/quota model already used for iOS.
-
-Current backend contracts the app already uses:
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` | `/api/subscriptions/plans` | Catalog / display |
-| `POST` | `/api/subscriptions/verify-receipt` | Trust purchase after client buy |
-| `GET` | `/api/subscriptions/status` | **Source of truth** (active, trial, quotas) |
-| `POST` | `/api/subscriptions/restore` | Re-link purchases to user |
-| `POST` | `/api/subscriptions/cancel` | Return store manage URL (does not cancel billing) |
-
-iOS today verifies Apple transactions. Android should use **RevenueCat as the Play billing middleware**, with our API remaining the authority for PetMood access.
+**Audience:** PetMood Python backend developers  
+**Status:** Android app side is implemented (`react-native-purchases`). iOS stays on StoreKit / existing Apple verify path.  
+**Related:** `ANDROID_GOOGLE_PLAY_CONSOLE.md` (Play + RC dashboard) · `ANDROID_REVENUECAT_APP.md` (app)
 
 ---
 
-## 1. Recommended backend architecture
+## 0. What you must deliver (backend checklist)
+
+| # | Requirement | Why |
+|---|-------------|-----|
+| 1 | Accept `POST /api/subscriptions/verify-receipt` with `platform: "google"` | App calls this right after Play purchase / restore |
+| 2 | Verify via **RevenueCat REST** (secret key), do **not** trust client `revenuecat_customer_info` alone | Anti-spoofing |
+| 3 | Webhook endpoint for RC events (minimum below) | Renewals / cancel / expire when app is closed |
+| 4 | Look up user by RevenueCat `app_user_id` = PetMood user id (**Firebase `uid` today**) | Identity binding |
+| 5 | Keep `GET /api/subscriptions/status` as **source of truth** for quotas | App never unlocks from RC ClientInfo alone |
+| 6 | `POST /restore` re-syncs Google/RC for authenticated user | Restore Purchases button |
+| 7 | `POST /cancel` returns Play manage URL (do not cancel billing server-side) | In-app “Cancel” opens Play |
+| 8 | Leave Apple `platform` / missing-platform path unchanged | iOS must keep working |
+
+**Mandatory webhook events (security list):**
+
+- `INITIAL_PURCHASE`
+- `RENEWAL`
+- `CANCELLATION`
+- `EXPIRATION`
+
+Also handle when possible: `PRODUCT_CHANGE`, `UNCANCELLATION`, `BILLING_ISSUE`, `TRANSFER`, `SUBSCRIBER_ALIAS`.
+
+---
+
+## 1. Architecture
 
 ```
 Google Play Billing
@@ -25,163 +39,169 @@ Google Play Billing
 RevenueCat
   - validates Play purchases
   - tracks renewals, cancels, grace, billing retry
-  - sends webhooks to our backend
+  - webhooks → PetMood API
         │
         ▼
 PetMood Python API
-  - maps RC events → user subscription row
-  - computes quotas / tiers
-  - exposes GET /subscriptions/status to the app
+  - maps RC → subscription row + quotas
+  - GET /subscriptions/status  ← app source of truth
 ```
 
 **Two sync paths (use both):**
 
-1. **Client-driven sync (fast UX)**  
-   After `Purchases.purchasePackage` / `restorePurchases`, app calls our API so unlock is immediate.
-
-2. **Webhook-driven sync (correct lifecycle)**  
-   RevenueCat notifies us of renewals, cancellations, expiration, billing issues, product changes — even if the app is closed.
-
-Renewal Kit on the app helps UI freshness; **webhooks** keep the database correct.
+1. **Client verify (fast UX)** — after purchase/restore, app POSTs verify-receipt.  
+2. **Webhooks (correct lifecycle)** — RC notifies server even if the app is closed.
 
 ---
 
-## 2. Identity linking (critical)
+## 2. Identity (critical)
 
-RevenueCat `app_user_id` must equal a stable PetMood user identifier.
-
-Recommended:
-
-- Use Firebase `uid` as RevenueCat `appUserID`
-- Store on user: `firebase_uid`, `revenuecat_app_user_id` (same value)
+| Layer | Value |
+|-------|--------|
+| App RevenueCat `appUserID` | Firebase **`uid`** from profile (`user.uid`) — treated as PetMood db user id for RC |
+| Auth to our API | Firebase Bearer ID token (unchanged) |
+| Webhook lookup | `event.app_user_id` / `original_app_user_id` → user with that uid |
 
 Rules:
 
-1. Never create paid entitlements for anonymous/random ids in production
-2. On login, app calls `Purchases.logIn(firebaseUid)` so historical Play purchases attach to the right user
-3. Backend webhook handler must look up user by `app_user_id` / `original_app_user_id`
+1. Never grant paid access for anonymous RC users.
+2. On login the app calls `Purchases.logIn(uid)`; on logout `Purchases.logOut()`.
+3. On verify: resolve Bearer → user; ensure `revenuecat_app_user_id` matches that user’s `uid` (or ignore client field and force server uid).
+4. If product later switches to a numeric DB PK, **app + webhooks + verify must change together**.
 
 ---
 
-## 3. Data model changes (Python)
+## 3. Product / entitlement map
 
-Extend the existing subscription table / model (names illustrative):
+Same product IDs as iOS / Play:
+
+| Product ID | Plan | Period | RC entitlement |
+|------------|------|--------|----------------|
+| `com.petmood.premium.monthly` | premium | monthly | `premium` |
+| `com.petmood.premium.annual` | premium | annual | `premium` |
+| `com.petmood.family.monthly` | family | monthly | `family` |
+| `com.petmood.family.annual` | family | annual | `family` |
+
+Reject any product id outside this allow-list.
+
+---
+
+## 4. Data model (extend existing subscription)
 
 ```text
 Subscription
   user_id
   platform                 # 'apple' | 'google'
-  product_id               # com.petmood.premium.monthly, etc.
+  product_id
   plan_type                # premium | family
   period                   # monthly | annual
-  store_transaction_id     # Play order id / RC transaction id when available
-  original_transaction_id  # stable subscription id if available
-  revenuecat_subscriber_id # optional
-  entitlement_ids          # e.g. ["premium"]
+  store_transaction_id
+  original_transaction_id
+  revenuecat_app_user_id
+  entitlement_ids
   is_active
-  is_trial                 # Play intro offer / RC period type
-  will_renew               # from RC renewal info
+  is_trial
+  will_renew
   expires_at
-  grace_period_expires_at  # nullable
-  billing_issue_detected_at# nullable
-  canceled_at              # nullable (user turned off auto-renew)
-  raw_payload              # last RC customer info / event JSON (audit)
+  grace_period_expires_at
+  billing_issue_detected_at
+  canceled_at
+  raw_payload
   updated_at
 ```
 
-Quota computation should continue to return the existing shape consumed by the app:
+`GET /status` response shape stays the same for the app (`subscription` + `quotas`).
 
-- `tier`
-- `maxProfiles` / `profilesUsed` / `profilesRemaining`
-- `scansAllowed` / `scansPerDay` / `scansUsedToday` / `scansRemainingToday`
-- `requiresSubscription`
-- `resetsAt`
-
-Suggested Google tiers (mirror Apple naming where useful):
-
-| Situation | `tier` example |
-|-----------|----------------|
-| No paid sub, account trial active | `account_trial` |
-| Trial ended, no paid sub | `expired_locked` |
-| Active Premium | `premium` |
-| Active Family | `family` |
-| Play intro offer on Premium | `premium_play_trial` (or reuse `premium_storekit_trial` if you want one name) |
-| Play intro offer on Family | `family_play_trial` |
-
-Pick one naming scheme and keep `GET /status` stable for the app.
+Suggested tiers: `account_trial` | `expired_locked` | `premium` | `family`  
+(optional Play intro: reuse `premium_storekit_trial` / `family_storekit_trial` or add `premium_play_trial`).
 
 ---
 
-## 4. API changes
+## 5. API contracts (what the Android app sends)
 
-### 4.1 Extend `POST /api/subscriptions/verify-receipt`
+### 5.1 `POST /api/subscriptions/verify-receipt` — Google
 
-Keep the path for app compatibility; make it multi-platform.
+**Auth:** Firebase Bearer (required)
 
-**Request (suggested):**
+**Body the Android app sends today:**
 
 ```json
 {
   "platform": "google",
   "product_id": "com.petmood.premium.monthly",
-  "revenuecat_app_user_id": "firebaseUidHere",
-  "revenuecat_customer_info": { },
+  "transaction_id": "<string from RC / Play>",
+  "revenuecat_app_user_id": "<firebase uid>",
   "entitlement_ids": ["premium"],
-  "transaction_id": "GPA.1234-5678-9012-34567",
-  "purchase_token": "optional-if-you-still-want-raw-play-token"
+  "revenuecat_customer_info": { }
 }
 ```
 
-Notes:
+| Field | Required | Notes |
+|-------|----------|--------|
+| `platform` | yes | `"google"` for Android |
+| `product_id` | yes | Must be allow-listed |
+| `transaction_id` | yes | Opaque string; may be RC/Play id or fallback sync id |
+| `revenuecat_app_user_id` | yes | Must match authenticated user’s uid |
+| `entitlement_ids` | recommended | Hint only — re-check via RC REST |
+| `revenuecat_customer_info` | optional | Hint only — **re-fetch server-side** |
 
-- For Android + RevenueCat, prefer verifying via **RevenueCat REST API** (server-side) using the `app_user_id`, not trusting the client JSON alone.
-- `platform: "apple"` keeps the existing Apple JWS / transaction verification path.
+**Apple path unchanged** when `platform` is missing or `"apple"` (transaction_id + optional `signed_transaction_jws`).
 
-**Server steps for `platform=google`:**
+**Server steps for Google:**
 
-1. Authenticate Firebase Bearer → resolve PetMood user
-2. Confirm `revenuecat_app_user_id` matches that user (or force the known uid)
-3. Call RevenueCat REST: get subscriber / customer info for that app user id
-4. Confirm active entitlement (`premium` or `family`) and product id
-5. Upsert subscription row (`platform=google`)
-6. Recompute quotas
-7. Return `{ success, subscription }` same shape as iOS
-
-### 4.2 Keep `GET /api/subscriptions/status` as source of truth
-
-No change to response contract if possible. Internally:
-
-- Merge account-level trial with paid Google/Apple subscription
-- Prefer paid active entitlement over free trial
-- Include grace period: decide product policy (usually keep access until grace ends)
-
-### 4.3 `POST /api/subscriptions/restore`
-
-For Google:
-
-1. Optionally accept RC customer info from client
-2. Always re-fetch RevenueCat subscriber server-side
-3. Attach found active entitlements to the authenticated user
-4. Return updated status / subscription
-
-### 4.4 `POST /api/subscriptions/cancel`
-
-Do **not** cancel Play billing in backend (impossible the way merchants expect).
-
-Return:
+1. Authenticate Firebase Bearer → PetMood user (`uid`).
+2. Confirm `revenuecat_app_user_id == user.uid` (or overwrite with server uid).
+3. `GET https://api.revenuecat.com/v1/subscribers/{app_user_id}` with **secret** API key.
+4. Confirm active entitlement `premium` or `family` and matching product.
+5. Upsert subscription `platform=google`, recompute quotas.
+6. Return same shape as iOS:
 
 ```json
 {
   "success": true,
-  "manageSubscriptionUrl": "https://play.google.com/store/account/subscriptions?sku=com.petmood.premium.monthly&package=com.aipetmood"
+  "subscription": {
+    "plan_type": "premium",
+    "period": "monthly",
+    "expires_at": "2026-12-01T00:00:00Z",
+    "is_active": true
+  }
 }
 ```
 
-If product id unknown, return the generic Play subscriptions URL.
+### 5.2 `GET /api/subscriptions/status`
 
-### 4.5 `GET /api/subscriptions/plans`
+No contract change. Internally merge Apple + Google + account trial. Prefer active paid over free trial. Honor grace if product policy says so.
 
-Extend plans to include Google:
+### 5.3 `POST /api/subscriptions/restore`
+
+Auth: Firebase Bearer.
+
+1. Resolve user uid.
+2. Fetch RC subscriber for that `app_user_id`.
+3. Attach active entitlements; return updated subscriptions/quotas (or empty if none).
+4. App then re-fetches `GET /status`.
+
+### 5.4 `POST /api/subscriptions/cancel`
+
+Do **not** cancel Play billing. Return:
+
+```json
+{
+  "success": true,
+  "platform": "google",
+  "canCancelDirectlyFromBackend": false,
+  "manageSubscriptionUrl": "https://play.google.com/store/account/subscriptions?sku=com.petmood.premium.monthly&package=com.aipetmood",
+  "message": "Manage or cancel in Google Play"
+}
+```
+
+Fallback if product unknown:
+
+`https://play.google.com/store/account/subscriptions`
+
+### 5.5 `GET /api/subscriptions/plans` (optional enhancement)
+
+Include Google rows:
 
 ```json
 {
@@ -193,131 +213,111 @@ Extend plans to include Google:
 }
 ```
 
-App can still prefer live RevenueCat/Play localized price when available.
+App prefers live Play/RC prices when available; backend prices are fallback.
 
 ---
 
-## 5. RevenueCat webhooks (Python)
+## 6. RevenueCat webhooks
 
-### 5.1 Endpoint
-
-Create e.g.:
+### 6.1 Endpoint
 
 `POST /api/subscriptions/webhooks/revenuecat`
 
-- No Firebase user token
-- Verify RevenueCat **Authorization** shared secret header
-- Idempotent by `id` / `event_timestamp` / store transaction id
+- **No** Firebase user token
+- Verify shared secret (Authorization header / RC webhook auth)
+- Idempotent by event `id` / transaction id
+- Always return `2xx` for duplicates after no-op
 
-### 5.2 Events to handle
-
-At minimum:
+### 6.2 Event handling
 
 | Event | Backend action |
 |-------|----------------|
-| `INITIAL_PURCHASE` | Activate plan, set expires_at, clear expired_locked |
-| `RENEWAL` | Extend expires_at, mark will_renew=true, clear billing issue |
-| `PRODUCT_CHANGE` | Update product_id / plan_type / period |
-| `CANCELLATION` | Set will_renew=false, keep access until expires_at |
-| `UNCANCELLATION` | Set will_renew=true |
-| `EXPIRATION` | Deactivate paid access; fall back to account trial rules / expired_locked |
-| `BILLING_ISSUE` | Flag billing issue; honor grace if RC provides grace period end |
-| `SUBSCRIBER_ALIAS` | Merge identities if needed |
-| `TRANSFER` | Move entitlement between app user ids carefully |
+| `INITIAL_PURCHASE` | Activate plan, set `expires_at`, clear `expired_locked` |
+| `RENEWAL` | Extend `expires_at`, `will_renew=true`, clear billing issue |
+| `CANCELLATION` | `will_renew=false`, **keep access until** `expires_at` |
+| `EXPIRATION` | Deactivate paid access → trial / `expired_locked` rules |
+| `PRODUCT_CHANGE` | Update product / plan / period |
+| `UNCANCELLATION` | `will_renew=true` |
+| `BILLING_ISSUE` | Flag; honor grace end if present |
+| `TRANSFER` / `SUBSCRIBER_ALIAS` | Merge identities carefully |
 
-Renewal Kit on the client covers UX for many of these; webhook handling is still required so scanner quotas stay correct when the app is killed.
-
-### 5.3 Example handler outline (FastAPI / Django style)
+### 6.3 Handler sketch
 
 ```python
 @router.post("/subscriptions/webhooks/revenuecat")
 def revenuecat_webhook(request, authorization: str = Header(None)):
     assert authorization == settings.REVENUECAT_WEBHOOK_SECRET
     event = parse_event(request.json())
-    user = find_user_by_rc_app_user_id(event.app_user_id)
+    user = find_user_by_uid(event.app_user_id)  # RC app_user_id == Firebase uid
     if not user:
-        # log + 200 to avoid endless retries only if you intentionally ignore unknowns
-        return {"ok": True}
-
-    apply_revenuecat_event(user, event)  # upsert subscription + quotas
+        return {"ok": True}  # log unknown; avoid endless retries if intentional
+    apply_revenuecat_event(user, event)
     return {"ok": True}
 ```
 
-Always return `2xx` for duplicate/old events after no-op.
+---
+
+## 7. Env / secrets (server only)
+
+| Env var | Where | Notes |
+|---------|--------|--------|
+| `REVENUECAT_SECRET_API_KEY` | Backend | Server-only; never in the mobile app |
+| `REVENUECAT_WEBHOOK_SECRET` | Backend | Matches RC webhook auth |
+| `REVENUECAT_GOOGLE_APP_ID` | Backend (optional) | If your RC REST calls need it |
+
+Mobile app only has the **public** Google SDK key (`goog_…`) in `src/common/config.ts`.
 
 ---
 
-## 6. Server-side RevenueCat REST usage
+## 8. Security checklist
 
-Configure:
-
-- `REVENUECAT_SECRET_API_KEY` (server only)
-- `REVENUECAT_WEBHOOK_SECRET`
-- `REVENUECAT_GOOGLE_APP_ID` / project id as needed
-
-Use secret key to:
-
-1. `GET /v1/subscribers/{app_user_id}` after client verify/restore
-2. Optionally grant/revoke promotional entitlements (support tools) — optional
-
-Never expose the secret key to the mobile app.
-
----
-
-## 7. Quotas & business rules (unchanged product intent)
-
-Keep existing PetMood rules unless product changes them:
-
-| Tier | Profiles | Scans |
-|------|----------|-------|
-| Account trial | per current backend rule (e.g. 2) | e.g. 7/day |
-| Expired / locked | blocked or limited | scans blocked |
-| Premium paid | per backend rule | unlimited (if that remains policy) |
-| Family paid | higher profile cap | per backend rule |
-
-Google purchases should only change tier when RevenueCat shows an **active** entitlement (or valid grace policy you choose).
-
----
-
-## 8. Security checklist (backend)
-
-1. Trust **RevenueCat secret API + webhooks**, not client-only payloads
-2. Bind purchases to authenticated Firebase user
-3. Reject product ids outside the allow-list (`com.petmood.*`)
-4. Store raw event payloads for support disputes
-5. Make webhook processing idempotent
-6. Do not delete historical subscription rows; mark expired
-7. Log platform (`google` vs `apple`) for every activation
+- [ ] Webhooks: `INITIAL_PURCHASE`, `RENEWAL`, `CANCELLATION`, `EXPIRATION`
+- [ ] `app_user_id` = Firebase `uid` (current app binding)
+- [ ] Trust RC secret API + webhooks, not client CustomerInfo alone
+- [ ] Bind verify to authenticated Firebase user
+- [ ] Allow-list product ids `com.petmood.*`
+- [ ] Idempotent webhooks; store raw payloads
+- [ ] Log `platform` (`google` vs `apple`) on every activation
+- [ ] Do not delete historical rows; mark expired
 
 ---
 
 ## 9. Testing plan (backend)
 
-1. Sandbox / license tester purchase → client verify → status active
-2. Webhook `INITIAL_PURCHASE` alone (no client call) → status active
-3. `RENEWAL` extends `expires_at`
-4. `CANCELLATION` keeps access until period end
-5. `EXPIRATION` moves user to `expired_locked` / trial rules
-6. `BILLING_ISSUE` + grace → access policy matches product decision
-7. Restore after reinstall with same Firebase user
-8. User A purchase cannot activate User B
+1. License-tester purchase → client verify → `GET /status` active  
+2. Webhook `INITIAL_PURCHASE` alone → status active  
+3. `RENEWAL` extends `expires_at`  
+4. `CANCELLATION` keeps access until period end  
+5. `EXPIRATION` → locked / trial rules  
+6. Restore after reinstall, same Firebase user  
+7. User A purchase cannot activate User B  
+8. Apple path still works after Google changes  
 
 ---
 
 ## 10. Definition of done (backend)
 
-- [ ] `verify-receipt` accepts `platform=google` and validates via RevenueCat
-- [ ] Webhook endpoint secured and idempotent
-- [ ] `GET /status` reflects Google entitlements + quotas
-- [ ] `restore` re-attaches RC subscriber to user
-- [ ] `cancel` returns Play manage URL
-- [ ] `plans` can return Google products
-- [ ] Apple path remains intact
+- [ ] `verify-receipt` accepts `platform=google` and validates via RevenueCat REST  
+- [ ] Webhook secured + idempotent for the four mandatory events  
+- [ ] `GET /status` reflects Google entitlements + quotas  
+- [ ] `restore` re-attaches RC subscriber to user  
+- [ ] `cancel` returns Play manage URL  
+- [ ] Apple path intact  
 
 ---
 
-## 11. Related docs
+## 11. What backend needs from others
 
-- App implementation: `ANDROID_REVENUECAT_APP.md`
-- Google Play Console setup: `ANDROID_GOOGLE_PLAY_CONSOLE.md`
-- Existing Apple verify notes: `IAP_VERIFY_RECEIPT_AND_BACKEND.md`
+| From | Needed |
+|------|--------|
+| **RevenueCat dashboard** | Secret API key, webhook URL + shared secret, entitlements `premium` / `family` |
+| **Google Play** (via mobile/ops) | Service account linked to RC so Play purchases validate (see Play Console doc) |
+| **App team** | Confirm `app_user_id` stays Firebase `uid`; public `goog_` key already in app config when ready |
+
+---
+
+## 12. Related docs
+
+- Google Play Console + what we need from Play: `ANDROID_GOOGLE_PLAY_CONSOLE.md`  
+- App implementation: `ANDROID_REVENUECAT_APP.md`  
+- Apple verify notes: `IAP_VERIFY_RECEIPT_AND_BACKEND.md`  

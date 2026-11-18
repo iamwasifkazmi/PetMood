@@ -23,6 +23,12 @@ export const SUBSCRIPTION_PRODUCT_IDS = {
   FAMILY_ANNUAL: 'com.petmood.family.annual',
 } as const;
 
+/** RevenueCat entitlement identifiers (must match RC dashboard). */
+export const REVENUECAT_ENTITLEMENTS = {
+  premium: 'premium',
+  family: 'family',
+} as const;
+
 /**
  * Subscription Plan Types
  */

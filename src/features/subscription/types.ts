@@ -81,9 +81,9 @@ export interface PurchaseReceipt {
  * (`purchaseToken` on iOS in react-native-iap — same unified field name).
  */
 export interface VerifyReceiptRequest {
-  /** App Store subscription / IAP product id (e.g. com.petmood.premium.monthly) */
+  /** App Store / Play subscription product id (e.g. com.petmood.premium.monthly) */
   product_id: string;
-  /** Current transaction id from StoreKit (string) */
+  /** Current transaction id from StoreKit / Play / RC (string) */
   transaction_id: string;
   /** Subscription family id; stable across renewals (recommended when present) */
   original_transaction_id?: string;
@@ -93,6 +93,13 @@ export interface VerifyReceiptRequest {
    * Backend may verify this JWS directly or rely on `transaction_id` + App Store Server API.
    */
   signed_transaction_jws?: string;
+  /** `apple` (default / iOS) or `google` (Android + RevenueCat) */
+  platform?: 'apple' | 'google';
+  /** RevenueCat app_user_id — must equal PetMood db user id */
+  revenuecat_app_user_id?: string;
+  /** Client CustomerInfo for immediate sync; backend must re-verify via RC REST */
+  revenuecat_customer_info?: Record<string, unknown>;
+  entitlement_ids?: string[];
 }
 
 export interface VerifyReceiptResponse {
@@ -116,7 +123,7 @@ export interface SubscriptionPlan {
   name: string;
   plan_type: 'premium' | 'family';
   period: 'monthly' | 'annual';
-  platform: 'apple';
+  platform: 'apple' | 'google';
   price_display: string;
   trial_offer?: {
     enabled?: boolean;

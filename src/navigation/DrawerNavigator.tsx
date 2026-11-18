@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RootState } from '../features/store';
 import { SubscriptionEntitlementSync } from '../features/subscription/SubscriptionEntitlementSync';
+import { RevenueCatIdentitySync } from '../features/subscription/RevenueCatIdentitySync';
 import { useDeleteUserAccountMutation } from '../features/user/userApiSlice';
 import { performLogout } from '../services/authSession';
 import PrivacyPolicy from '../screens/private/privacyPolicy';
@@ -207,6 +208,7 @@ const DrawerNavigator = () => {
   return (
     <>
       <SubscriptionEntitlementSync />
+      <RevenueCatIdentitySync />
       <Drawer.Navigator
         screenOptions={{
           headerShown: false,

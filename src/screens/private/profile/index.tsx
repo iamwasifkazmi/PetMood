@@ -58,6 +58,29 @@ import { navigateToSubscription } from '../../../utils/navigateToSubscription';
 import PetDetails from './PetDetails';
 import { ProfileProps } from '../../../navigation/types';
 
+/** Prefer API `photoUrl`, then legacy `image`; normalize local paths for Image. */
+function resolvePetPhotoUri(
+  pet?: { image?: string | null; photoUrl?: string | null } | null,
+): string | null {
+  const raw = (pet?.photoUrl || pet?.image || '').trim();
+  if (!raw) return null;
+  if (
+    raw.startsWith('http://') ||
+    raw.startsWith('https://') ||
+    raw.startsWith('file://') ||
+    raw.startsWith('content://') ||
+    raw.startsWith('ph://') ||
+    raw.startsWith('assets-library://')
+  ) {
+    return raw;
+  }
+  // Local absolute path from image cropper (iOS/Android)
+  if (raw.startsWith('/')) {
+    return `file://${raw}`;
+  }
+  return raw;
+}
+
 const Profile = ({ route, navigation }: ProfileProps) => {
   const { colors, spacing } = useTheme();
   const styles = useStyles(colors, spacing);
@@ -310,7 +333,21 @@ const Profile = ({ route, navigation }: ProfileProps) => {
           <>
             <View style={{ alignSelf: 'center', marginBottom: 20 }}>
               <Image
-                source={petImage ? { uri: petImage } : images.gallery_rounded}
+                source={
+                  petImage
+                    ? {
+                        uri:
+                          petImage.startsWith('http') ||
+                          petImage.startsWith('file://') ||
+                          petImage.startsWith('content://') ||
+                          petImage.startsWith('ph://')
+                            ? petImage
+                            : petImage.startsWith('/')
+                              ? `file://${petImage}`
+                              : petImage,
+                      }
+                    : images.gallery_rounded
+                }
                 style={styles.image}
                 resizeMode="cover"
               />
@@ -400,7 +437,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
                   ? new Date(petDetails.dateOfBirth)
                   : null,
               );
-              setPetImage(petDetails?.image || null);
+              setPetImage(resolvePetPhotoUri(petDetails));
             }}
             petDetails={petDetails}
           />
@@ -525,10 +562,10 @@ const useStyles = (colors: Theme['colors'], spacing: Theme['spacing']) =>
       right: 0,
     },
     image: {
-      resizeMode: 'contain',
       width: 84,
       height: 84,
       overflow: 'hidden',
       borderRadius: 50,
+      backgroundColor: colors.border,
     },
   });

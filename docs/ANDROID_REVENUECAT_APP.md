@@ -1,14 +1,24 @@
 # Android In-App Purchases — App Side (RevenueCat)
 
-This document describes what the **PetMood React Native app** should do for **Google Play** subscriptions using the **RevenueCat Purchases SDK**, and optionally the **RevenueCat Renewal Kit**.
+**Status:** Implemented in the RN app (Android only). iOS remains StoreKit / `react-native-iap`.
 
-Related current iOS flow (already live):
+This document describes the **PetMood React Native** Android path for **Google Play** subscriptions via **RevenueCat Purchases**.
+
+Related:
+
+- Backend: `ANDROID_REVENUECAT_BACKEND_PYTHON.md`
+- Play Console / what we need from Google: `ANDROID_GOOGLE_PLAY_CONSOLE.md`
+
+iOS (unchanged):
 
 - StoreKit via `react-native-iap`
 - Backend is still the **source of truth** for entitlements / quotas (`GET /api/subscriptions/status`)
-- Product IDs today: `com.petmood.premium.monthly`, `com.petmood.premium.annual`, `com.petmood.family.monthly`, `com.petmood.family.annual`
+- Product IDs: `com.petmood.premium.monthly`, `com.petmood.premium.annual`, `com.petmood.family.monthly`, `com.petmood.family.annual`
 
-**Goal for Android:** mirror the same product catalog and backend status model, but use RevenueCat instead of talking to Google Play Billing directly.
+**Android goal:** same catalog + status model, RevenueCat instead of raw Play Billing UI.
+
+**App config:** public Google SDK key → `src/common/config.ts` → `revenuecat_google_api_key` (`goog_…`).  
+**Identity:** `Purchases.logIn(user.uid)` (Firebase uid as RC `app_user_id`).
 
 ---
 
@@ -109,24 +119,49 @@ Android native setup:
 - Confirm `APPLICATION_ID` / package name is `com.aipetmood`
 - Release builds signed with the Play upload key already used for AAB uploads
 
-### 4.2 Initialize SDK (Android only)
+### 4.2 Initialize SDK (Android only) — security requirements
 
-On app start **after** Firebase auth is ready (or as soon as the user session exists):
+**Mandatory (client / backend security list):**
 
-1. `Purchases.configure({ apiKey: REVENUECAT_GOOGLE_API_KEY, appUserID: <our user id> })`
-2. Prefer a **stable backend user id** (Firebase `uid` or PetMood user id) — never a random device id for production
-3. If the user logs in later, call `Purchases.logIn(appUserID)`
-4. On logout, call `Purchases.logOut()` (or leave anonymous only if product requires it — PetMood should always be logged in for paid unlock)
+1. **User binding:** Always call `Purchases.logIn(db_user_id)` with the **database user id** after login. Do **not** allow anonymous users to subscribe.
+2. **Strict verification:** Configure SDK request verification with the strictest available mode. RevenueCat removed public `ENFORCED`; use `ENTITLEMENT_VERIFICATION_MODE.INFORMATIONAL` and reject `VERIFICATION_RESULT.FAILED` locally. Access still comes from backend/webhooks only.
+3. **Server authority:** Access is granted from backend status/webhooks only — never unlock Premium/Family from client `CustomerInfo` alone.
+
+On app start **after** the PetMood user session exists (db user id known):
+
+1. `Purchases.configure({ apiKey: REVENUECAT_GOOGLE_API_KEY, appUserID: dbUserId })`
+2. `Purchases.setLogLevel(...)` as needed in debug only
+3. Enable enforced verification (RN Purchases API; names may vary slightly by SDK version):
+
+```ts
+import Purchases, {
+  LOG_LEVEL,
+  PURCHASES_ARE_COMPLETED_BY_TYPE,
+} from 'react-native-purchases';
+// Prefer the SDK's VerificationMode.ENFORCED when configuring Purchases
+// (see current react-native-purchases docs for PurchasesConfiguration.entitlementVerificationMode)
+```
+
+4. On every successful login / session restore: `await Purchases.logIn(String(dbUserId))`
+5. On logout: `await Purchases.logOut()`
+6. **Purchase guard:** if there is no `db_user_id` / not logged in → block Subscribe / Restore (show login). Never start a Play purchase while anonymous.
 
 Pseudo-flow:
 
 ```ts
 if (Platform.OS === 'android') {
-  Purchases.configure({ apiKey: RC_GOOGLE_KEY, appUserID: firebaseUid });
+  Purchases.configure({
+    apiKey: RC_GOOGLE_KEY,
+    appUserID: String(dbUserId), // PetMood DB user id (not anonymous)
+    // entitlementVerificationMode: ENFORCED  — required
+  });
+  await Purchases.logIn(String(dbUserId));
 }
 ```
 
 Do **not** call StoreKit/`react-native-iap` initialize on Android.
+
+Identity note: use the **same** `db_user_id` the backend stores and looks up from RevenueCat webhooks (`app_user_id`). If product later standardizes on Firebase `uid`, backend + app must switch together — default for this security list is **DB user id**.
 
 ### 4.3 Fetch offerings for the Subscription screen
 
@@ -237,14 +272,18 @@ Keep current product rules:
 
 1. RevenueCat **public** SDK key is OK in the app; never put Google Play **service account private keys** in the app.
 2. Always send Firebase Bearer token on backend sync calls.
-3. Test with **license testers** on Internal testing track before production.
-4. Verify: purchase → status active → scan allowed; cancel in Play → eventually status expires; restore on reinstall after login.
-5. Confirm Family vs Premium entitlement mapping cannot be spoofed by client (backend must validate).
+3. **`Purchases.logIn(db_user_id)`** on login; no anonymous subscribe.
+4. **`ENTITLEMENT_VERIFICATION_MODE.INFORMATIONAL`** + reject `FAILED` (ENFORCED removed by RevenueCat; this is the supported strict path).
+5. Test with **license testers** on Internal testing track before production.
+6. Verify: purchase → status active → scan allowed; cancel in Play → eventually status expires; restore on reinstall after login.
+7. Confirm Family vs Premium entitlement mapping cannot be spoofed by client (backend must validate via RC + webhooks).
 
 ---
 
 ## 7. Definition of done (app)
 
+- [ ] `Purchases.logIn(db_user_id)` on login; subscribe blocked when logged out
+- [ ] `VerificationMode.ENFORCED` enabled on Android
 - [ ] Android can load live Play prices via RevenueCat offerings
 - [ ] User can purchase Premium/Family monthly/annual
 - [ ] Restore works after reinstall for the same Google account + PetMood login

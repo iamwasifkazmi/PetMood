@@ -166,6 +166,7 @@ const Subscription = () => {
     error,
     isInitialized,
     purchaseSubscription,
+    restorePurchases,
     refetchStatus,
     refreshAll,
     subscriptionStatusResolved,
@@ -284,10 +285,13 @@ const Subscription = () => {
     });
     
     if (product) {
-      // Get price from product (handle both iOS and Android types)
-      const price = (product as any).localizedPrice || (product as any).price;
+      // Get price from product (StoreKit / RevenueCat)
+      const price =
+        (product as any).localizedPrice ||
+        (product as any).priceString ||
+        (product as any).price;
       if (price) {
-        return price;
+        return typeof price === 'number' ? String(price) : price;
       }
     }
     
@@ -296,7 +300,7 @@ const Subscription = () => {
     return plan?.priceFormatted || '';
   };
 
-  /** Product IDs returned by App Store (StoreKit) — only these may be purchased */
+  /** Product IDs from App Store (iOS) or RevenueCat / Play (Android) */
   const availableStoreProductIds = useMemo(() => {
     const ids = new Set<string>();
     for (const p of products) {
@@ -324,12 +328,8 @@ const Subscription = () => {
     [availableStoreProductIds],
   );
 
-  /** When StoreKit returns no products (sandbox delay, etc.), still list plans from GET /plans or local config */
+  /** Prefer live store packages; fall back to GET /plans or local catalog */
   const premiumPlansToShow = useMemo(() => {
-    if (Platform.OS !== 'ios') {
-      // Android: show catalog for transparency; purchase opens “coming soon”
-      return SUBSCRIPTION_PLANS.filter(p => p.type === 'premium');
-    }
     if (premiumPlansFromStore.length > 0) {
       return premiumPlansFromStore;
     }
@@ -345,9 +345,6 @@ const Subscription = () => {
   }, [premiumPlansFromStore, backendPlans]);
 
   const familyPlansToShow = useMemo(() => {
-    if (Platform.OS !== 'ios') {
-      return SUBSCRIPTION_PLANS.filter(p => p.type === 'family');
-    }
     if (familyPlansFromStore.length > 0) {
       return familyPlansFromStore;
     }
@@ -377,19 +374,16 @@ const Subscription = () => {
   };
 
   const alertMustCancelExistingFirst = useCallback(() => {
+    const storeLabel = Platform.OS === 'ios' ? 'Apple’s' : 'Google Play';
     Alert.alert(
       'You already have a subscription',
-      'To change plans, cancel your current subscription first (tap “Cancel subscription”). After it ends or from Apple’s subscription settings, you can choose a different plan.',
+      `To change plans, cancel your current subscription first (tap “Cancel subscription”). After it ends or from ${storeLabel} subscription settings, you can choose a different plan.`,
       [{ text: 'OK' }],
     );
   }, []);
 
   const handlePurchase = async (productId: string) => {
-    if (Platform.OS !== 'ios') {
-      Alert.alert(
-        'Coming soon on Android',
-        'Google Play subscriptions are being enabled for AIPetMood. Your trial limits still apply. Please check back after the next update, or subscribe from an iOS device if needed.',
-      );
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
       return;
     }
 
@@ -422,39 +416,29 @@ const Subscription = () => {
     }
     if (!canPurchaseFromStore) {
       showErrMsg(
-        'This plan is not available from the App Store yet. Pull down to refresh or try again in a moment.',
+        Platform.OS === 'android'
+          ? 'This plan is not available from Google Play yet. Pull down to refresh or try again in a moment.'
+          : 'This plan is not available from the App Store yet. Pull down to refresh or try again in a moment.',
       );
       return;
     }
 
-    // Clear any previous errors
     store.dispatch(setError(null));
 
-    // Don't block if not initialized - let iOS handle it
     if (!isInitialized) {
-      // Try to initialize quickly
       try {
-        const initialized = await subscriptionService.initialize();
-        if (!initialized) {
-          // Still try purchase - iOS might handle it
-        }
-      } catch (e) {
-        // Continue anyway
+        await subscriptionService.initialize();
+      } catch {
+        // Continue — store sheet may still work
       }
     }
 
     try {
       setIsPurchasing(true);
       setSelectedPlan(productId);
-      
-      // Always attempt purchase - let iOS handle product availability
-      // iOS will show its own error if product doesn't exist
-      // This is better for review/testing scenarios
+
       await purchaseSubscription(productId);
 
-      // When the user dismisses the Apple IAP / Sign in sheet, `purchaseSubscription`
-      // often resolves immediately with Redux loading already cleared. Clear the card
-      // spinner here instead of waiting a frame for the purchaseLoading → useEffect path.
       if (!store.getState().subscription?.isLoading) {
         if (purchaseFallbackTimeoutRef.current) {
           clearTimeout(purchaseFallbackTimeoutRef.current);
@@ -465,8 +449,6 @@ const Subscription = () => {
         return;
       }
 
-      // Purchase flow still active (verification, etc.)
-      // Fallback: clear loader after 15s if nothing settles
       if (purchaseFallbackTimeoutRef.current) {
         clearTimeout(purchaseFallbackTimeoutRef.current);
       }
@@ -478,10 +460,8 @@ const Subscription = () => {
     } catch (error: any) {
       console.error('Purchase error in handlePurchase:', error);
       const errorMsg = error?.message || 'Failed to purchase subscription';
-      // Always clear loader on any purchase error
       setIsPurchasing(false);
       setSelectedPlan(null);
-      // Only show error for critical failures (not cancellations or product unavailable)
       if (
         !errorMsg.includes('cancelled') &&
         !errorMsg.includes('canceled') &&
@@ -496,12 +476,16 @@ const Subscription = () => {
     }
   };
 
-  /* Restore button hidden — re-enable with PrimaryButton below
   const handleRestore = async () => {
     try {
       setIsPurchasing(true);
       await restorePurchases();
-      showSuccessMsg('Purchases restored successfully!');
+      const active = store.getState().subscription?.subscription?.isActive;
+      if (active) {
+        showSuccessMsg('Purchases restored successfully!');
+      } else {
+        showErrMsg('No active subscription found to restore.');
+      }
     } catch (error: any) {
       console.error('Restore error:', error);
       showErrMsg(error.message || 'Failed to restore purchases');
@@ -509,7 +493,6 @@ const Subscription = () => {
       setIsPurchasing(false);
     }
   };
-  */
 
   const getCurrentPlanDisplay = () => {
     if (!subscription?.isActive) {
@@ -545,8 +528,11 @@ const Subscription = () => {
     }
   }, [refreshAll]);
 
+  const PLAY_SUBSCRIPTIONS_MANAGE_URL =
+    'https://play.google.com/store/account/subscriptions';
+
   const openManageSubscription = async () => {
-    if (Platform.OS !== 'ios') {
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
       return;
     }
     try {
@@ -562,24 +548,28 @@ const Subscription = () => {
     } catch (e) {
       console.warn('Cancel subscription API failed, using fallback URL', e);
     }
-    await Linking.openURL(APPLE_SUBSCRIPTIONS_MANAGE_URL);
+    await Linking.openURL(
+      Platform.OS === 'android'
+        ? PLAY_SUBSCRIPTIONS_MANAGE_URL
+        : APPLE_SUBSCRIPTIONS_MANAGE_URL,
+    );
   };
 
   const confirmCancelSubscription = () => {
-    Alert.alert(
-      'Cancel subscription?',
-      'We’ll open Apple’s subscription page next. Apple may ask you to finish cancellation in Settings → Subscriptions or in Safari — apps cannot cancel Apple billing directly.\n\nDo you want to continue?',
-      [
-        { text: 'Not now', style: 'cancel' },
-        {
-          text: 'Continue',
-          style: 'destructive',
-          onPress: () => {
-            void openManageSubscription();
-          },
+    const message =
+      Platform.OS === 'android'
+        ? 'We’ll open Google Play subscription settings next. Apps cannot cancel Play billing directly — finish cancellation in Play Store → Subscriptions.\n\nDo you want to continue?'
+        : 'We’ll open Apple’s subscription page next. Apple may ask you to finish cancellation in Settings → Subscriptions or in Safari — apps cannot cancel Apple billing directly.\n\nDo you want to continue?';
+    Alert.alert('Cancel subscription?', message, [
+      { text: 'Not now', style: 'cancel' },
+      {
+        text: 'Continue',
+        style: 'destructive',
+        onPress: () => {
+          void openManageSubscription();
         },
-      ],
-    );
+      },
+    ]);
   };
 
   return (
@@ -609,7 +599,7 @@ const Subscription = () => {
           Subscription Plans
         </AppText>
 
-        {Platform.OS === 'ios' && (
+        {(Platform.OS === 'ios' || Platform.OS === 'android') && (
           <View style={[styles.statusCard, { marginBottom: 16 }]}>
             <AppText fontWeight="bold" style={{ marginBottom: 8 }}>
               Your subscription
@@ -930,22 +920,8 @@ const Subscription = () => {
           </View>
         )}
 
-        {Platform.OS !== 'ios' && (
-          <View style={[styles.statusCard, { backgroundColor: '#1C697120' }]}>
-            <AppText fontWeight="bold" style={{ marginBottom: 8 }}>
-              Android subscriptions
-            </AppText>
-            <AppText color={colors.caption} size={13} style={{ lineHeight: 20 }}>
-              Google Play billing for Premium and Family plans is being rolled out.
-              Your free account trial and scan limits from the server still apply on
-              Android. Full in-app purchase on Google Play will be available in a
-              coming update — you can view plan details below.
-            </AppText>
-          </View>
-        )}
-
-        {/* Single place: free trial, billing, cancel (Apple) — plan cards stay short below */}
-        {Platform.OS === 'ios' && (
+        {/* Free trial, billing, cancel — iOS App Store / Android Google Play */}
+        {(Platform.OS === 'ios' || Platform.OS === 'android') && (
           <View style={[styles.statusCard, styles.trialInfoCard]}>
             <AppText fontWeight="bold">Free trial &amp; billing</AppText>
             <AppText size={11} color={colors.caption} style={{ marginTop: 10, lineHeight: 18 }}>
@@ -957,10 +933,9 @@ const Subscription = () => {
               charged; you can use premium features until the trial ends.{'\n'}
               • If you don’t cancel before the trial ends, your subscription renews
               automatically at the plan price until you cancel.{'\n'}
-              • The introductory trial is available only once per eligible subscriber, per
-              Apple’s rules.{'\n'}
-              • To cancel: Settings → your name → Subscriptions → AIPetMood → Cancel
-              Subscription.
+              {Platform.OS === 'ios'
+                ? '• The introductory trial is available only once per eligible subscriber, per Apple’s rules.\n• To cancel: Settings → your name → Subscriptions → AIPetMood → Cancel Subscription.'
+                : '• The introductory trial is available only once per eligible subscriber, per Google Play rules.\n• To cancel: Play Store → Payments & subscriptions → Subscriptions → AIPetMood → Cancel.'}
             </AppText>
             <TouchableOpacity
               onPress={() => void openManageSubscription()}
@@ -971,7 +946,9 @@ const Subscription = () => {
                 <ActivityIndicator size="small" color={colors.primary} />
               ) : (
                 <AppText size={13} color={colors.primary} fontWeight="semiBold">
-                  Cancel or manage in App Store (opens Apple) →
+                  {Platform.OS === 'android'
+                    ? 'Cancel or manage in Google Play →'
+                    : 'Cancel or manage in App Store (opens Apple) →'}
                 </AppText>
               )}
             </TouchableOpacity>
@@ -980,23 +957,21 @@ const Subscription = () => {
               color={colors.caption}
               style={{ marginTop: 6, lineHeight: 15 }}
             >
-              This calls the server first (Apple does not allow apps to cancel
-              subscriptions in-app). You will finish in Apple’s subscription
-              settings in Safari.
+              {Platform.OS === 'android'
+                ? 'This calls the server first (apps cannot cancel Play subscriptions in-app). You finish in Google Play subscription settings.'
+                : 'This calls the server first (Apple does not allow apps to cancel subscriptions in-app). You will finish in Apple’s subscription settings in Safari.'}
             </AppText>
           </View>
         )}
 
-        {/* StoreKit: optional notice — plans still show from server/local when store is empty */}
-        {Platform.OS === 'ios' && !isInitialized && backendPlans.length === 0 && (
+        {!isInitialized && backendPlans.length === 0 && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
             <AppText style={{ marginTop: 16 }}>Loading plans…</AppText>
           </View>
         )}
 
-        {Platform.OS === 'ios' &&
-          isInitialized &&
+        {isInitialized &&
           products.length === 0 &&
           premiumPlansToShow.length > 0 && (
             <View
@@ -1006,18 +981,17 @@ const Subscription = () => {
               ]}
             >
               <AppText fontWeight="bold" color={colors.primary} style={{ marginBottom: 6 }}>
-                App Store prices pending
+                {Platform.OS === 'android' ? 'Play prices pending' : 'App Store prices pending'}
               </AppText>
               <AppText size={13} color={colors.text} style={{ lineHeight: 20 }}>
-                The App Store has not returned product prices yet (common in sandbox or
-                right after install). Plan options below still show — prices may come from
-                the server or defaults until Apple responds. Pull down to refresh.
+                {Platform.OS === 'android'
+                  ? 'Google Play / RevenueCat has not returned product prices yet. Plan options below still show — prices may come from the server or defaults. Pull down to refresh.'
+                  : 'The App Store has not returned product prices yet (common in sandbox or right after install). Plan options below still show — prices may come from the server or defaults until Apple responds. Pull down to refresh.'}
               </AppText>
             </View>
           )}
 
-        {Platform.OS === 'ios' &&
-          isInitialized &&
+        {isInitialized &&
           products.length === 0 &&
           premiumPlansToShow.length === 0 &&
           familyPlansToShow.length === 0 && (
@@ -1031,14 +1005,13 @@ const Subscription = () => {
                 Subscription plans unavailable
               </AppText>
               <AppText size={13} color={colors.text} style={{ lineHeight: 20 }}>
-                We could not load plans from the App Store or the server. Check your
+                We could not load plans from the store or the server. Check your
                 connection and pull down to refresh.
               </AppText>
             </View>
           )}
 
-        {Platform.OS === 'ios' &&
-          isInitialized &&
+        {isInitialized &&
           products.length > 0 &&
           premiumPlansFromStore.length === 0 &&
           familyPlansFromStore.length === 0 &&
@@ -1054,9 +1027,12 @@ const Subscription = () => {
                 Plan configuration mismatch
               </AppText>
               <AppText size={13} color={colors.text} style={{ lineHeight: 20 }}>
-                The App Store returned products, but none match this app’s subscription
-                IDs. Check that product identifiers in App Store Connect match the app
-                configuration.
+                The store returned products, but none match this app’s subscription IDs.
+                Check that product identifiers in{' '}
+                {Platform.OS === 'android'
+                  ? 'Google Play / RevenueCat'
+                  : 'App Store Connect'}{' '}
+                match the app configuration.
               </AppText>
             </View>
           )}
@@ -1323,16 +1299,14 @@ const Subscription = () => {
             </>
           )}
 
-        {/* Restore Purchases Button — hidden for now
         <PrimaryButton
           title="Restore Purchases"
           type="outlined"
           onPress={handleRestore}
           loading={isPurchasing}
-          disabled={Platform.OS !== 'ios' || isPurchasing}
+          disabled={isPurchasing}
           style={{ marginTop: 32, marginBottom: 24 }}
         />
-        */}
 
         {/* Required Links - Privacy, EULA, Terms & Conditions (Apple 3.1.2) */}
         <View style={[styles.linksContainer, { flexWrap: 'wrap', justifyContent: 'center' }]}>

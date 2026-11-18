@@ -24,8 +24,8 @@ const PetDetails = ({
     <View style={[containerStyle, { gap: 24 }]}>
       <Image
         source={
-          petDetails?.image || petDetails?.photoUrl
-            ? { uri: petDetails.image || petDetails.photoUrl }
+          petDetails?.photoUrl || petDetails?.image
+            ? { uri: petDetails.photoUrl || petDetails.image }
             : images.pet_detail
         }
         style={{

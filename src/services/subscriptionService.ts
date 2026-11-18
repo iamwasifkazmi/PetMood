@@ -22,6 +22,18 @@ import {
 } from '../features/subscription/subscriptionSlice';
 import { DEFAULT_QUOTAS } from '../utils/subscriptionQuotas';
 import { subscriptionApiSlice } from '../features/subscription/subscriptionApiSlice';
+import {
+  configureRevenueCatAndroid,
+  getRevenueCatStoreProducts,
+  isRevenueCatUserCancelledError,
+  logInRevenueCatAndroid,
+  logOutRevenueCatAndroid,
+  purchaseRevenueCatPackage,
+  resolveDbUserId,
+  restoreRevenueCatPurchases,
+  type RevenueCatPurchaseSyncPayload,
+  type RevenueCatStoreProductLike,
+} from './revenueCatAndroid';
 
 /**
  * Covers StoreKit dismissals: library UserCancelled mapping, SK payment canceled (often 2),
@@ -74,16 +86,32 @@ class SubscriptionService {
   private isInitialized = false;
 
   /**
-   * Initialize IAP connection
+   * Initialize store billing:
+   * - iOS: StoreKit via react-native-iap
+   * - Android: RevenueCat Purchases (requires logged-in db user id)
    */
-  async initialize(): Promise<boolean> {
+  async initialize(dbUserId?: string | null): Promise<boolean> {
     try {
+      if (Platform.OS === 'android') {
+        const uid =
+          dbUserId?.trim() ||
+          resolveDbUserId(store.getState().user?.user) ||
+          null;
+        if (!uid) {
+          console.warn('RevenueCat: skip init until user is logged in');
+          return false;
+        }
+        await configureRevenueCatAndroid(uid);
+        this.isInitialized = true;
+        return true;
+      }
+
       if (this.isInitialized) {
         return true;
       }
 
       if (Platform.OS !== 'ios') {
-        console.warn('IAP is only supported on iOS');
+        console.warn('IAP is only supported on iOS / Android');
         return false;
       }
 
@@ -98,6 +126,77 @@ class SubscriptionService {
       console.error('Failed to initialize IAP:', error);
       store.dispatch(setError('Failed to initialize in-app purchases'));
       return false;
+    }
+  }
+
+  /** Bind RevenueCat to PetMood db user id after login (Android only). */
+  async bindAndroidUser(dbUserId: string): Promise<void> {
+    if (Platform.OS !== 'android') {
+      return;
+    }
+    await logInRevenueCatAndroid(dbUserId);
+    this.isInitialized = true;
+  }
+
+  /** Clear RevenueCat identity on logout (Android only). */
+  async unbindAndroidUser(): Promise<void> {
+    if (Platform.OS !== 'android') {
+      return;
+    }
+    await logOutRevenueCatAndroid();
+    this.isInitialized = false;
+  }
+
+  private async syncGooglePurchaseToBackend(
+    payload: RevenueCatPurchaseSyncPayload,
+  ): Promise<void> {
+    store.dispatch(setLoading(true));
+    try {
+      const verifyReceipt = store.dispatch(
+        subscriptionApiSlice.endpoints.verifyReceipt.initiate({
+          platform: 'google',
+          product_id: payload.product_id,
+          transaction_id: payload.transaction_id,
+          revenuecat_app_user_id: payload.revenuecat_app_user_id,
+          entitlement_ids: payload.entitlement_ids,
+          revenuecat_customer_info: payload.revenuecat_customer_info as unknown as Record<
+            string,
+            unknown
+          >,
+        }),
+      );
+      const result = await verifyReceipt;
+
+      if (!result.data?.success) {
+        const errorMsg =
+          result.data?.message ||
+          (result.error as any)?.message ||
+          'Failed to verify Google Play purchase';
+        store.dispatch(setError(errorMsg));
+        return;
+      }
+
+      const status = await store.dispatch(
+        subscriptionApiSlice.endpoints.getSubscriptionStatus.initiate(undefined, {
+          forceRefetch: true,
+        }),
+      );
+      if (status.data) {
+        store.dispatch(
+          setSubscriptionStatus({
+            subscription: status.data.subscription ?? null,
+            quotas: status.data.quotas ?? DEFAULT_QUOTAS,
+          }),
+        );
+      } else {
+        store.dispatch(
+          setError(
+            'Purchase was verified, but we could not load your subscription. Try Restore or open subscription settings again.',
+          ),
+        );
+      }
+    } finally {
+      store.dispatch(setLoading(false));
     }
   }
 
@@ -247,10 +346,20 @@ class SubscriptionService {
   }
 
   /**
-   * Get available subscription products
+   * Get available subscription products (StoreKit on iOS, RevenueCat on Android)
    */
-  async getAvailableProducts(): Promise<Product[]> {
+  async getAvailableProducts(): Promise<Product[] | RevenueCatStoreProductLike[]> {
     try {
+      if (Platform.OS === 'android') {
+        if (!this.isInitialized) {
+          const ok = await this.initialize();
+          if (!ok) {
+            return [];
+          }
+        }
+        return await getRevenueCatStoreProducts();
+      }
+
       const productIds = getAllProductIds();
       const products = await fetchProducts({ skus: productIds, type: 'subs' });
       // Handle different return types
@@ -268,6 +377,37 @@ class SubscriptionService {
    */
   async purchaseSubscription(productId: string): Promise<void> {
     try {
+      if (Platform.OS === 'android') {
+        const uid = resolveDbUserId(store.getState().user?.user);
+        if (!uid) {
+          throw new Error('Please sign in before purchasing a subscription');
+        }
+        if (!this.isInitialized) {
+          const initialized = await this.initialize(uid);
+          if (!initialized) {
+            throw new Error('Failed to initialize Google Play billing. Please try again.');
+          }
+        }
+
+        store.dispatch(setLoading(true));
+        store.dispatch(setError(null));
+        try {
+          const payload = await purchaseRevenueCatPackage(productId);
+          await this.syncGooglePurchaseToBackend(payload);
+        } catch (purchaseError: any) {
+          store.dispatch(setLoading(false));
+          if (isRevenueCatUserCancelledError(purchaseError)) {
+            console.log('User cancelled Google Play purchase');
+            return;
+          }
+          const msg =
+            purchaseError?.message || 'Failed to purchase subscription on Google Play';
+          store.dispatch(setError(msg));
+          throw purchaseError;
+        }
+        return;
+      }
+
       // Ensure IAP is initialized first
       if (!this.isInitialized) {
         console.log('IAP not initialized, initializing now...');
@@ -410,12 +550,53 @@ class SubscriptionService {
 
   /**
    * Restore previous purchases: POST /restore, then GET /status (source of truth).
-   * If still no entitlement, verify local StoreKit purchases with verify-receipt.
+   * iOS: if still no entitlement, verify local StoreKit purchases with verify-receipt.
+   * Android: RevenueCat restore + Google verify-receipt sync.
    */
   async restorePurchases(): Promise<void> {
     try {
       store.dispatch(setLoading(true));
       store.dispatch(setError(null));
+
+      if (Platform.OS === 'android') {
+        const uid = resolveDbUserId(store.getState().user?.user);
+        if (!uid) {
+          throw new Error('Please sign in before restoring purchases');
+        }
+        if (!this.isInitialized) {
+          await this.initialize(uid);
+        }
+
+        const payload = await restoreRevenueCatPurchases();
+        if (payload) {
+          await this.syncGooglePurchaseToBackend(payload);
+        }
+
+        await store.dispatch(
+          subscriptionApiSlice.endpoints.restorePurchases.initiate({}),
+        );
+
+        const statusResult = await store.dispatch(
+          subscriptionApiSlice.endpoints.getSubscriptionStatus.initiate(undefined, {
+            forceRefetch: true,
+          }),
+        );
+
+        if (statusResult.data) {
+          store.dispatch(
+            setSubscriptionStatus({
+              subscription: statusResult.data.subscription ?? null,
+              quotas: statusResult.data.quotas ?? DEFAULT_QUOTAS,
+            }),
+          );
+          if (statusResult.data.subscription?.isActive) {
+            return;
+          }
+        }
+
+        store.dispatch(setError('No active subscription found'));
+        return;
+      }
 
       await store.dispatch(
         subscriptionApiSlice.endpoints.restorePurchases.initiate({}),
@@ -469,13 +650,15 @@ class SubscriptionService {
    * Clean up listeners
    */
   cleanup() {
-    if (this.purchaseUpdateSubscription) {
-      this.purchaseUpdateSubscription.remove();
-      this.purchaseUpdateSubscription = null;
-    }
-    if (this.purchaseErrorSubscription) {
-      this.purchaseErrorSubscription.remove();
-      this.purchaseErrorSubscription = null;
+    if (Platform.OS === 'ios') {
+      if (this.purchaseUpdateSubscription) {
+        this.purchaseUpdateSubscription.remove();
+        this.purchaseUpdateSubscription = null;
+      }
+      if (this.purchaseErrorSubscription) {
+        this.purchaseErrorSubscription.remove();
+        this.purchaseErrorSubscription = null;
+      }
     }
     this.isInitialized = false;
   }

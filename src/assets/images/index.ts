@@ -1,8 +1,14 @@
 export default {
+  /**
+   * Legacy full mark with incorrect "AI PETMOOD" text baked in.
+   * Prefer `aipetmood_icon` on splash/auth — official name is AIPetMood.
+   */
   logo: require('./aiptmood-logo.jpeg'),
 
   dog_rounded: require('./dog_rounded.png'),
-  simple_logo: require('./aiptmood-logo.jpeg'),
+  /** Icon-only mark (no text) — use on splash / auth / headers */
+  simple_logo: require('./aipetmood_icon.png'),
+  aipetmood_icon: require('./aipetmood_icon.png'),
   pet_group: require('./pet_group.png'),
   gallery_rounded: require('./gallery_rounded.png'),
   pet_detail: require('./pet_detail.png'),
