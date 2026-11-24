@@ -1,7 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { Alert, Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
 import ImagePicker from 'react-native-image-crop-picker';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useNavigation } from '@react-navigation/native';
+import { ValidationError } from 'yup';
 import icons from '../../../assets/icons/icons';
 import images from '../../../assets/images';
 import { Theme } from '../../../common/theme';
@@ -9,9 +11,8 @@ import AppText from '../../../components/Text/AppText';
 import PrimaryButton from '../../../components/buttons/PrimaryButton';
 import Header from '../../../components/header/Header';
 import { useTheme } from '../../../hooks/useTheme';
-import { requestGalleryPermission } from '../../../services/permission';
 import PersonalDetailsTab from './PersonalDetailsTab';
-import SecurityTab from './SecurityTab';
+import SecurityTab, { SecurityFieldErrors } from './SecurityTab';
 import GlobalBottomSheet, {
   GlobalBottomSheetRef,
 } from '../../../components/views/GlobalBottomSheet';
@@ -20,7 +21,11 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../../features/store';
 import { useUpdateUserProfileMutation } from '../../../features/user/userApiSlice';
 import { useChangePasswordMutation } from '../../../features/auth/authApiSlice';
-import { showErrMsg } from '../../../utils/flashMessage';
+import {
+  changePasswordSchema,
+  getApiErrorMessage,
+  SAVE_CHANGES_ERROR,
+} from '../../../utils/validations';
 
 const Settings = () => {
   const navigation = useNavigation();
@@ -46,129 +51,185 @@ const Settings = () => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [securityErrors, setSecurityErrors] = useState<SecurityFieldErrors>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'personal_details' | 'security'>(
     'personal_details',
   );
+  const scrollRef = useRef<KeyboardAwareScrollView>(null);
 
   const [updateProfile, updateProfileProps] = useUpdateUserProfileMutation();
   const [changePassword, changePasswordProps] = useChangePasswordMutation();
 
   const bottomSheetRef = useRef<GlobalBottomSheetRef>(null);
-  console.log('user', user);
   const isPersonalTab = activeTab === 'personal_details';
   const isSecurityTab = activeTab === 'security';
 
   const openGallery = async () => {
-    const hasPermission = await requestGalleryPermission();
-    if (!hasPermission) return;
-
-    ImagePicker.openPicker({
-      width: 300,
-      height: 300,
-      cropping: true,
-    })
-      .then(image => {
-        setPetImage(image.path);
-      })
-      .catch(() => {});
+    // Android: system Photo Picker — no READ_MEDIA_IMAGES (Play policy)
+    try {
+      const image = await ImagePicker.openPicker({
+        width: 300,
+        height: 300,
+        cropping: true,
+        mediaType: 'photo',
+      });
+      setPetImage(image.path);
+    } catch {
+      // user cancelled
+    }
   };
 
   const handleOkay = () => {
     bottomSheetRef?.current?.close();
   };
 
+  const clearSecurityField = (field: keyof SecurityFieldErrors) => {
+    setSecurityErrors(prev => ({ ...prev, [field]: undefined }));
+    setSaveError(null);
+  };
+
+  const scrollLocationIntoView = () => {
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd(true);
+    }, 280);
+  };
+
   const handleSaveChanges = async () => {
+    setSaveError(null);
     try {
       if (isPersonalTab) {
-        const formData = new FormData();
-        
-        if (name) {
-          formData.append('name', name);
-        }
-        if (phone) {
-          formData.append('number', phone);
-        }
-        if (selectedLocation) {
-          formData.append('location', selectedLocation);
-        }
-        
-        // Send image file with 'photoUrl' key as specified (only if it's a local file, not a URL)
-        if (petImage && !petImage.startsWith('http')) {
+        const hasLocalPhoto = Boolean(petImage && !petImage.startsWith('http'));
+
+        // Text-only updates: JSON (multipart FormData often fails on Android release builds).
+        // Photo updates: multipart with file field `photoUrl`.
+        if (hasLocalPhoto) {
+          const formData = new FormData();
+          if (name) {
+            formData.append('name', name);
+          }
+          if (phone) {
+            formData.append('number', phone);
+          }
+          if (selectedLocation) {
+            formData.append('location', selectedLocation);
+          }
           formData.append('photoUrl', {
-            uri: petImage.startsWith('file://')
-              ? petImage
+            uri: petImage!.startsWith('file://')
+              ? petImage!
               : `file://${petImage}`,
             type: 'image/jpeg',
             name: `profile_${Date.now()}.jpg`,
           } as any);
+          await updateProfile(formData).unwrap();
+        } else {
+          const body: {
+            name?: string;
+            number?: string;
+            location?: string;
+          } = {};
+          if (name.trim()) {
+            body.name = name.trim();
+          }
+          if (phone.trim()) {
+            body.number = phone.trim();
+          }
+          body.location = selectedLocation.trim();
+          await updateProfile(body).unwrap();
         }
-        
-        await updateProfile(formData).unwrap();
-        
+
         // Clear local image state - user state will be updated with new photoUrl from backend
         setPetImage(null);
         bottomSheetRef?.current?.expand();
       } else if (isSecurityTab) {
+        try {
+          await changePasswordSchema.validate(
+            { currentPassword, newPassword, confirmPassword },
+            { abortEarly: false },
+          );
+        } catch (validationError) {
+          const next: SecurityFieldErrors = {};
+          if (validationError instanceof ValidationError) {
+            validationError.inner.forEach(item => {
+              if (
+                item.path === 'currentPassword' ||
+                item.path === 'newPassword' ||
+                item.path === 'confirmPassword'
+              ) {
+                next[item.path] = item.message;
+              }
+            });
+            if (
+              !next.currentPassword &&
+              !next.newPassword &&
+              !next.confirmPassword &&
+              validationError.path
+            ) {
+              const path = validationError.path as keyof SecurityFieldErrors;
+              if (
+                path === 'currentPassword' ||
+                path === 'newPassword' ||
+                path === 'confirmPassword'
+              ) {
+                next[path] = validationError.message;
+              }
+            }
+          }
+          setSecurityErrors(next);
+          return;
+        }
+
+        setSecurityErrors({});
         const emailUser = user?.email?.toLowerCase();
-        const payload = {
-          email: emailUser ?? '',
+        if (!emailUser) {
+          setSaveError(
+            'Your account email is missing. Sign out and sign in again, then retry.',
+          );
+          return;
+        }
+        await changePassword({
+          email: emailUser,
           currentPassword,
           newPassword,
           confirmPassword,
-        };
-        const res = await changePassword(payload).unwrap();
+        }).unwrap();
         bottomSheetRef?.current?.expand();
         setConfirmPassword('');
         setCurrentPassword('');
         setNewPassword('');
       }
-    } catch (error: any) {
-      console.log('❌ Profile Update Error - Full Error Object:', JSON.stringify(error, null, 2));
-      console.log('❌ Error Status:', error?.status);
-      console.log('❌ Error Data:', error?.data);
-      console.log('❌ Error Response:', error?.response);
-      
-      // Extract error message from various possible locations
-      let errMsg = 'Something went wrong. Please try again.';
-      
-      if (error?.data) {
-        // RTK Query unwrap format
-        errMsg = 
-          error.data?.detail ||
-          error.data?.message ||
-          error.data?.error?.message ||
-          error.data?.data?.detail ||
-          error.data?.data?.message ||
-          JSON.stringify(error.data);
-      } else if (error?.response?.data) {
-        // Axios error format
-        errMsg = 
-          error.response.data?.detail ||
-          error.response.data?.message ||
-          error.response.data?.error?.message ||
-          JSON.stringify(error.response.data);
-      } else if (error?.message) {
-        errMsg = error.message;
+    } catch (error: unknown) {
+      const detail = getApiErrorMessage(error, SAVE_CHANGES_ERROR);
+      const lower = detail.toLowerCase();
+      if (
+        isSecurityTab &&
+        (lower.includes('current password') ||
+          lower.includes('incorrect password') ||
+          lower.includes('wrong password') ||
+          lower.includes('invalid credentials'))
+      ) {
+        setSecurityErrors({ currentPassword: detail });
+        setSaveError(null);
+        return;
       }
-      
-      // Include status code if available
-      const statusCode = error?.status || error?.response?.status;
-      if (statusCode) {
-        errMsg = `[${statusCode}] ${errMsg}`;
-      }
-      
-      console.log('❌ Final Error Message:', errMsg);
-      showErrMsg(errMsg);
+      setSaveError(detail);
     }
   };
 
   return (
     <View style={{ flex: 1 }}>
       <Header />
-      <ScrollView
-        contentContainerStyle={{ padding: spacing.padding, paddingBottom: 40 }}
+      <KeyboardAwareScrollView
+        ref={scrollRef}
+        contentContainerStyle={{ padding: spacing.padding, paddingBottom: 160 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        enableOnAndroid
+        enableAutomaticScroll
+        extraScrollHeight={120}
+        extraHeight={80}
+        keyboardOpeningTime={0}
+        enableResetScrollToCoords={false}
       >
         <AppText
           variant="heading"
@@ -177,6 +238,25 @@ const Settings = () => {
         >
           Settings
         </AppText>
+
+        {saveError ? (
+          <View style={styles.saveError}>
+            <AppText size={13} color={colors.danger} style={{ flex: 1 }}>
+              {saveError}
+            </AppText>
+            <TouchableOpacity
+              onPress={() => void handleSaveChanges()}
+              disabled={
+                updateProfileProps.isLoading || changePasswordProps.isLoading
+              }
+              style={styles.retryButton}
+            >
+              <AppText size={13} color={colors.primary} fontWeight="bold">
+                Retry
+              </AppText>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {/* Tabs */}
         <View
@@ -193,7 +273,10 @@ const Settings = () => {
                 ? colors.primary
                 : colors.background,
             }}
-            onPress={() => setActiveTab('personal_details')}
+            onPress={() => {
+              setSaveError(null);
+              setActiveTab('personal_details');
+            }}
           >
             <AppText
               fontWeight="bold"
@@ -210,7 +293,10 @@ const Settings = () => {
                 ? colors.primary
                 : colors.background,
             }}
-            onPress={() => setActiveTab('security')}
+            onPress={() => {
+              setSaveError(null);
+              setActiveTab('security');
+            }}
           >
             <AppText
               fontWeight="bold"
@@ -272,12 +358,25 @@ const Settings = () => {
 
             <PersonalDetailsTab
               email={email}
-              setEmail={setEmail}
+              setEmail={value => {
+                setSaveError(null);
+                setEmail(value);
+              }}
               name={name}
-              setName={setName}
-              setPhone={setPhone}
+              setName={value => {
+                setSaveError(null);
+                setName(value);
+              }}
+              setPhone={value => {
+                setSaveError(null);
+                setPhone(value);
+              }}
               selectedLocation={selectedLocation}
-              setSelectedLocation={setSelectedLocation}
+              setSelectedLocation={value => {
+                setSaveError(null);
+                setSelectedLocation(value);
+              }}
+              onLocationFocus={scrollLocationIntoView}
             />
           </>
         )}
@@ -286,11 +385,21 @@ const Settings = () => {
         {isSecurityTab && (
           <SecurityTab
             currentPassword={currentPassword}
-            setCurrentPassword={setCurrentPassword}
+            setCurrentPassword={value => {
+              clearSecurityField('currentPassword');
+              setCurrentPassword(value);
+            }}
             newPassword={newPassword}
-            setNewPassword={setNewPassword}
+            setNewPassword={value => {
+              clearSecurityField('newPassword');
+              setNewPassword(value);
+            }}
             confirmPassword={confirmPassword}
-            setConfirmPassword={setConfirmPassword}
+            setConfirmPassword={value => {
+              clearSecurityField('confirmPassword');
+              setConfirmPassword(value);
+            }}
+            errors={securityErrors}
           />
         )}
 
@@ -315,7 +424,7 @@ const Settings = () => {
             onPress={handleSaveChanges}
           />
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* Bottom Sheet */}
       <GlobalBottomSheet ref={bottomSheetRef} snapPoints={['35%']}>
@@ -366,5 +475,19 @@ const useStyles = (colors: Theme['colors'], spacing: Theme['spacing']) =>
       height: 84,
       overflow: 'hidden',
       borderRadius: 50,
+    },
+    saveError: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      backgroundColor: '#FDECEC',
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginBottom: 16,
+    },
+    retryButton: {
+      paddingVertical: 6,
+      paddingHorizontal: 4,
     },
   });

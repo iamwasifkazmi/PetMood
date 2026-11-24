@@ -564,7 +564,12 @@ class SubscriptionService {
           throw new Error('Please sign in before restoring purchases');
         }
         if (!this.isInitialized) {
-          await this.initialize(uid);
+          const ready = await this.initialize(uid);
+          if (!ready) {
+            throw new Error(
+              'Google Play billing is not ready yet. Pull down to refresh, or try again in a moment.',
+            );
+          }
         }
 
         const payload = await restoreRevenueCatPurchases();

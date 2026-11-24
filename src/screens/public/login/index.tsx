@@ -2,24 +2,18 @@ import React, { useRef, useState } from 'react';
 import {
   Keyboard,
   NativeSyntheticEvent,
-  Platform,
-  StyleSheet,
-  Text,
   TextInput,
   TextInputChangeEventData,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useFormik } from 'formik';
 
 import icons from '../../../assets/icons/icons';
-import { Theme } from '../../../common/theme';
 import PrimaryButton from '../../../components/buttons/PrimaryButton';
 import PrimaryInput from '../../../components/inputs/PrimaryInput';
 import AppText from '../../../components/Text/AppText';
-import LogoView from '../../../components/views/LogoView';
-import ScreenSafeArea from '../../../components/layout/ScreenSafeArea';
+import AuthFormCard from '../../../components/layout/AuthFormCard';
 import { useTheme } from '../../../hooks/useTheme';
 import { LoginProps, RouteName } from '../../../navigation/types';
 import { useLoginMutation } from '../../../features/auth/authApiSlice';
@@ -29,8 +23,7 @@ import { store } from '../../../features/store';
 import { setAuthSession } from '../../../features/auth/authSlice';
 
 const Login = ({ navigation }: LoginProps) => {
-  const { colors, fonts, spacing } = useTheme();
-  const styles = useStyles(colors, fonts, spacing);
+  const { colors } = useTheme();
 
   const [login, { isLoading }] = useLoginMutation();
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -88,7 +81,6 @@ const Login = ({ navigation }: LoginProps) => {
           ? (err as { message: string }).message
           : 'Please enter valid credentials.';
       setLoginError(message);
-      // Field-level error only — axios already suppresses Identity Toolkit toasts
     }
   };
 
@@ -180,132 +172,91 @@ const Login = ({ navigation }: LoginProps) => {
   };
 
   return (
-    <ScreenSafeArea style={{ backgroundColor: colors.primary }}>
-      <View style={{ paddingTop: 60, flex: 1 }}>
-        <LogoView />
-        <KeyboardAwareScrollView
-          style={styles.bottomView}
-          contentContainerStyle={{ paddingBottom: 72, flexGrow: 1 }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          enableOnAndroid
-          enableAutomaticScroll
-          extraScrollHeight={Platform.OS === 'android' ? 100 : 40}
-          extraHeight={Platform.OS === 'android' ? 140 : 60}
-          keyboardOpeningTime={0}
-          enableResetScrollToCoords={false}
-        >
-          <Text style={styles.title}>Sign In To Your Account</Text>
+    <AuthFormCard title="Sign In To Your Account">
+      <View style={{ gap: 4 }}>
+        <PrimaryInput
+          ref={emailInputRef}
+          leftImageSource={icons.email}
+          placeholder="Email"
+          required
+          keyboardType="email-address"
+          value={formik.values.email}
+          onChangeText={text => {
+            emailDraftRef.current = text;
+            setLoginError(null);
+            formik.handleChange('email')(text);
+          }}
+          onBlur={formik.handleBlur('email')}
+          onChange={syncEmailFromNativeChange}
+          autoCapitalize="none"
+          autoCorrect={false}
+          textContentType="username"
+          autoComplete="email"
+          importantForAutofill="yes"
+          error={showError('email')}
+        />
 
-          <View style={{ gap: 4 }}>
-            <PrimaryInput
-              ref={emailInputRef}
-              leftImageSource={icons.email}
-              placeholder="Email"
-              required
-              keyboardType="email-address"
-              value={formik.values.email}
-              onChangeText={text => {
-                emailDraftRef.current = text;
-                setLoginError(null);
-                formik.handleChange('email')(text);
-              }}
-              onBlur={formik.handleBlur('email')}
-              onChange={syncEmailFromNativeChange}
-              autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="username"
-              autoComplete="email"
-              importantForAutofill="yes"
-              error={showError('email')}
-            />
-
-            <PrimaryInput
-              ref={passwordInputRef}
-              leftImageSource={icons.lock}
-              placeholder="Password"
-              required
-              secureTextEntry
-              iconColor={colors.primary}
-              value={formik.values.password}
-              onChangeText={text => {
-                passwordDraftRef.current = text;
-                setLoginError(null);
-                formik.handleChange('password')(text);
-              }}
-              onBlur={formik.handleBlur('password')}
-              onChange={syncPasswordFromNativeChange}
-              textContentType="password"
-              autoComplete="password"
-              importantForAutofill="yes"
-              error={showError('password')}
-            />
-          </View>
-
-          <TouchableOpacity
-            style={{ alignSelf: 'flex-end', marginTop: 16 }}
-            onPress={() => navigation.navigate(RouteName.ResetPassword)}
-          >
-            <AppText
-              variant="heading"
-              style={{ fontSize: 14 }}
-              color={colors.primary}
-            >
-              Forgot Password?
-            </AppText>
-          </TouchableOpacity>
-
-          <View style={{ marginTop: 24 }}>
-            <PrimaryButton
-              onPress={handleLogin}
-              title="Sign In"
-              loading={isLoading}
-              disabled={isLoading}
-            />
-
-            <AppText
-              variant="body"
-              style={{ alignSelf: 'center', marginTop: 24 }}
-            >
-              Don’t have an account?
-              <AppText
-                onPress={() => navigation.navigate(RouteName.CreateAccount)}
-                variant="heading"
-                style={{ fontSize: 14 }}
-                color={colors.primary}
-              >
-                {' '}
-                Sign Up
-              </AppText>
-            </AppText>
-          </View>
-        </KeyboardAwareScrollView>
+        <PrimaryInput
+          ref={passwordInputRef}
+          leftImageSource={icons.lock}
+          placeholder="Password"
+          required
+          secureTextEntry
+          iconColor={colors.primary}
+          value={formik.values.password}
+          onChangeText={text => {
+            passwordDraftRef.current = text;
+            setLoginError(null);
+            formik.handleChange('password')(text);
+          }}
+          onBlur={formik.handleBlur('password')}
+          onChange={syncPasswordFromNativeChange}
+          textContentType="password"
+          autoComplete="password"
+          importantForAutofill="yes"
+          error={showError('password')}
+        />
       </View>
-    </ScreenSafeArea>
+
+      <TouchableOpacity
+        style={{ alignSelf: 'flex-end', marginTop: 16 }}
+        onPress={() => navigation.navigate(RouteName.ResetPassword)}
+      >
+        <AppText
+          variant="heading"
+          style={{ fontSize: 14 }}
+          color={colors.primary}
+        >
+          Forgot Password?
+        </AppText>
+      </TouchableOpacity>
+
+      <View style={{ marginTop: 24 }}>
+        <PrimaryButton
+          onPress={handleLogin}
+          title="Sign In"
+          loading={isLoading}
+          disabled={isLoading}
+        />
+
+        <AppText
+          variant="body"
+          style={{ alignSelf: 'center', marginTop: 24 }}
+        >
+          Don’t have an account?
+          <AppText
+            onPress={() => navigation.navigate(RouteName.CreateAccount)}
+            variant="heading"
+            style={{ fontSize: 14 }}
+            color={colors.primary}
+          >
+            {' '}
+            Sign Up
+          </AppText>
+        </AppText>
+      </View>
+    </AuthFormCard>
   );
 };
 
 export default Login;
-
-const useStyles = (
-  colors: Theme['colors'],
-  fonts: Theme['fonts'],
-  spacing: Theme['spacing'],
-) =>
-  StyleSheet.create({
-    bottomView: {
-      backgroundColor: colors.card,
-      padding: spacing.padding,
-      borderTopEndRadius: 50,
-      borderTopStartRadius: 50,
-      marginTop: 40,
-      flex: 1,
-    },
-    title: {
-      fontSize: 24,
-      textAlign: 'center',
-      color: colors.text,
-      ...fonts.semiBold,
-      marginBottom: 16,
-    },
-  });

@@ -42,10 +42,7 @@ import {
 } from '../../../features/pet/petApiSlice';
 import { useTheme } from '../../../hooks/useTheme';
 import { useSubscription } from '../../../hooks/useSubscription';
-import {
-  requestCameraPermission,
-  requestGalleryPermission,
-} from '../../../services/permission';
+import { requestCameraPermission } from '../../../services/permission';
 import { formatDate } from '../../../utils/formatTime';
 import {
   addPetButtonTitle,
@@ -200,56 +197,65 @@ const Profile = ({ route, navigation }: ProfileProps) => {
     }
 
     try {
-      if (isEdit && selectedId) {
-        // Update: Use FormData for update
-        const formData = new FormData();
-        formData.append('name', petName.trim());
-        formData.append('gender', String(selectedGender));
-        formData.append('species', String(selectedSpecies));
-        formData.append('breed', String(selectedBreed));
-        formData.append('dateOfBirth', moment(dob).format('YYYY-MM-DD'));
+      const hasLocalPhoto = Boolean(petImage && !petImage.startsWith('http'));
+      const petFields = {
+        name: petName.trim(),
+        gender: String(selectedGender),
+        species: String(selectedSpecies),
+        breed: String(selectedBreed),
+        dateOfBirth: moment(dob).format('YYYY-MM-DD'),
+      };
 
-        if (petImage && !petImage.startsWith('http')) {
-          // Only append if it's a local file path, not a URL
+      if (isEdit && selectedId) {
+        // Text-only: JSON. Local photo: multipart FormData.
+        if (hasLocalPhoto) {
+          const formData = new FormData();
+          formData.append('name', petFields.name);
+          formData.append('gender', petFields.gender);
+          formData.append('species', petFields.species);
+          formData.append('breed', petFields.breed);
+          formData.append('dateOfBirth', petFields.dateOfBirth);
           formData.append('photoUrl', {
-            uri: petImage.startsWith('file://')
-              ? petImage
+            uri: petImage!.startsWith('file://')
+              ? petImage!
               : `file://${petImage}`,
             type: 'image/jpeg',
             name: `pet_${Date.now()}.jpg`,
           } as any);
+          await updatePetProfile({
+            id: String(selectedId),
+            formData,
+          }).unwrap();
+        } else {
+          await updatePetProfile({
+            id: String(selectedId),
+            ...petFields,
+          }).unwrap();
         }
-
-        const res = await updatePetProfile({
-          id: String(selectedId),
-          formData: formData,
-        }).unwrap();
-        console.log('res', res);
         showSuccessMsg('Pet profile updated successfully!');
         setIsEdit(false);
         setShowPetDetails(true);
       } else {
-        // Create: Use FormData for create
-        const formData = new FormData();
-        formData.append('name', petName.trim());
-        formData.append('gender', String(selectedGender));
-        formData.append('species', String(selectedSpecies));
-        formData.append('breed', String(selectedBreed));
-        formData.append('dateOfBirth', moment(dob).format('YYYY-MM-DD'));
-
-        if (petImage && !petImage.startsWith('http')) {
-          // Only append if it's a local file path, not a URL
+        // Text-only: JSON (avoids Android FormData Content-Type crash).
+        // Local photo: multipart FormData.
+        if (hasLocalPhoto) {
+          const formData = new FormData();
+          formData.append('name', petFields.name);
+          formData.append('gender', petFields.gender);
+          formData.append('species', petFields.species);
+          formData.append('breed', petFields.breed);
+          formData.append('dateOfBirth', petFields.dateOfBirth);
           formData.append('photoUrl', {
-            uri: petImage.startsWith('file://')
-              ? petImage
+            uri: petImage!.startsWith('file://')
+              ? petImage!
               : `file://${petImage}`,
             type: 'image/jpeg',
             name: `pet_${Date.now()}.jpg`,
           } as any);
+          await createPetProfile(formData).unwrap();
+        } else {
+          await createPetProfile(petFields).unwrap();
         }
-
-        await createPetProfile(formData).unwrap();
-        console.log('callled');
         bottomSheetRef?.current?.expand();
         resetForm();
         void refetchStatus();
@@ -281,14 +287,13 @@ const Profile = ({ route, navigation }: ProfileProps) => {
   };
 
   const openGallery = async () => {
-    const hasPermission = await requestGalleryPermission();
-    if (!hasPermission) return;
-
+    // Android: system Photo Picker — no READ_MEDIA_IMAGES (Play policy)
     try {
       const image = await ImagePicker.openPicker({
         width: 300,
         height: 300,
         cropping: true,
+        mediaType: 'photo',
       });
       setPetImage(image.path);
     } catch (e) {}
@@ -503,7 +508,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
         )}
       </View>
 
-      <GlobalBottomSheet ref={bottomSheetRef} snapPoints={['10%']}>
+      <GlobalBottomSheet ref={bottomSheetRef} enableDynamicSizing>
         {isDeleteConfirmVisible ? <WarningImage /> : <SuccessImage />}
         <AppText
           variant="subheading"

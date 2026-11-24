@@ -17,6 +17,7 @@ interface PersonalDetailsProps {
 
   selectedLocation?: string;
   setSelectedLocation: (value: string) => void;
+  onLocationFocus?: () => void;
 }
 
 const PersonalDetailsTab = ({
@@ -28,6 +29,7 @@ const PersonalDetailsTab = ({
   setPhone,
   selectedLocation,
   setSelectedLocation,
+  onLocationFocus,
 }: PersonalDetailsProps) => {
   const { colors, spacing } = useTheme();
   const styles = useStyles(colors, spacing);
@@ -71,6 +73,7 @@ const PersonalDetailsTab = ({
         containerStyle={{ marginBottom: 15 }}
         value={selectedLocation ?? ''}
         onChangeText={setSelectedLocation}
+        onFocus={onLocationFocus}
       />
     </View>
   );

@@ -56,12 +56,14 @@ import {
   TERMS_AND_CONDITIONS_URL,
   TERMS_OF_USE_EULA_URL,
 } from '../../../common/legalUrls';
+import { useSafeBottomPadding } from '../../../hooks/useSafeBottomPadding';
 
 const UGC_TERMS_STORAGE_KEY = 'petmood_ugc_terms_accepted_v1';
 
 const Community = ({ navigation }: CommunityProps) => {
   const { colors, fonts, spacing } = useTheme();
   const styles = useStyles(colors, fonts, spacing);
+  const bottomInset = useSafeBottomPadding(8);
   const [activeTab, setActiveTab] = useState<'my_posts' | 'all_posts'>(
     'all_posts',
   );
@@ -225,9 +227,13 @@ const Community = ({ navigation }: CommunityProps) => {
   };
 
   const handleCreateComment = async (text: string) => {
+    const content = text.trim();
+    if (!content || !postId) {
+      throw new Error('Comment is empty');
+    }
     try {
       setCreateCommentInlineError('');
-      const res = await createComment({ postId, content: text }).unwrap();
+      await createComment({ postId, content }).unwrap();
     } catch (err: any) {
       const detail =
         err?.data?.detail || err?.data?.message || 'Unable to add comment.';
@@ -236,6 +242,7 @@ const Community = ({ navigation }: CommunityProps) => {
       } else {
         setCreateCommentInlineError(String(detail));
       }
+      throw err;
     }
   };
   const handleShare = (id: string) => console.log('Share post', id);
@@ -510,7 +517,10 @@ const Community = ({ navigation }: CommunityProps) => {
             title="Cancel"
             type="outlined"
             onPress={() => setCreatePost(false)}
-            style={{ marginHorizontal: 24 }}
+            style={{
+              marginHorizontal: 24,
+              marginBottom: Math.max(bottomInset, 24),
+            }}
           />
         </>
       ) : (
@@ -611,8 +621,8 @@ const Community = ({ navigation }: CommunityProps) => {
 
       <GlobalBottomSheet
         ref={bottomSheetRef}
-        snapPoints={['10%']}
-        showHandle={showComments ? true : false}
+        snapPoints={['75%', '95%']}
+        showHandle
       >
         {isPostUpload ? <SuccessImage /> : <WarningImage />}
         <AppText

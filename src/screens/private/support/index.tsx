@@ -124,7 +124,7 @@ const Support = () => {
       </View>
 
       {/* Success Bottom Sheet */}
-      <GlobalBottomSheet ref={bottomSheetRef} snapPoints={['10%']}>
+      <GlobalBottomSheet ref={bottomSheetRef} enableDynamicSizing>
         <SuccessImage />
         <AppText
           variant="subheading"

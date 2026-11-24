@@ -20,22 +20,10 @@ export const requestCameraPermission = async () => {
   return true;
 };
 
+/**
+ * Gallery picks use the Android system Photo Picker / GET_CONTENT — no
+ * READ_MEDIA_IMAGES (Play policy). Always allow the picker UI to open.
+ */
 export const requestGalleryPermission = async () => {
-  if (Platform.OS === 'android') {
-    try {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES, // For Android 13+
-        {
-          title: 'Gallery Permission',
-          message: 'App needs access to your photo library',
-          buttonPositive: 'OK',
-        },
-      );
-      return granted === PermissionsAndroid.RESULTS.GRANTED;
-    } catch (err) {
-      console.warn(err);
-      return false;
-    }
-  }
   return true;
 };

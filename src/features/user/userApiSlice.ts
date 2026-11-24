@@ -21,15 +21,20 @@ export const userApiSlice = createApi({
       FormData | UpdateProfileArg
     >({
       query: arg => {
-        const isFormData = arg instanceof FormData;
+        // RN FormData can fail plain instanceof across bundles.
+        const looksLikeFormData =
+          !!arg &&
+          typeof arg === 'object' &&
+          ((typeof FormData !== 'undefined' && arg instanceof FormData) ||
+            Object.prototype.toString.call(arg) === '[object FormData]' ||
+            Array.isArray((arg as { _parts?: unknown })._parts));
         return {
           url: 'profile',
           method: 'patch',
           data: arg,
-          headers: isFormData
-            ? {
-                'Content-Type': 'multipart/form-data',
-              }
+          // Never set multipart Content-Type manually (boundary must be set by runtime).
+          headers: looksLikeFormData
+            ? undefined
             : {
                 'Content-Type': 'application/json',
               },

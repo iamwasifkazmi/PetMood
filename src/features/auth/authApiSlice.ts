@@ -62,6 +62,7 @@ export const authApiSlice = createApi({
         url: 'auth/change-password',
         data: arg,
         method: 'post',
+        headers: { 'Content-Type': 'application/json' },
       }),
     }),
     forgotPassword: build.mutation<any, ForgotPasswordArg>({

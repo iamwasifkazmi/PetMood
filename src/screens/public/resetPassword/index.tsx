@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import {
+  Keyboard,
   Platform,
-  Text,
   View,
   TouchableOpacity,
   StyleSheet,
   TextInput,
 } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import CountryPicker, { Country } from 'react-native-country-picker-modal';
+import CountryPicker, {
+  Country,
+  FlagButton,
+} from 'react-native-country-picker-modal';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import parsePhoneNumber from 'libphonenumber-js';
 import { useFormik } from 'formik';
 import { showMessage } from 'react-native-flash-message';
@@ -18,8 +21,7 @@ import { useTheme } from '../../../hooks/useTheme';
 import PrimaryButton from '../../../components/buttons/PrimaryButton';
 import AppText from '../../../components/Text/AppText';
 import FieldError from '../../../components/inputs/FieldError';
-import LogoView from '../../../components/views/LogoView';
-import ScreenSafeArea from '../../../components/layout/ScreenSafeArea';
+import AuthFormCard from '../../../components/layout/AuthFormCard';
 import { ResetPasswordProps, RouteName } from '../../../navigation/types';
 import { useForgotPasswordMutation } from '../../../features/auth/authApiSlice';
 import {
@@ -37,14 +39,24 @@ const DEFAULT_COUNTRY: Country = {
   name: 'United States',
 };
 
+const CountryCodePicker = CountryPicker as React.ComponentType<
+  React.ComponentProps<typeof CountryPicker> & {
+    closeButtonStyle?: { marginTop: number };
+  }
+>;
+
 const ResetPassword = ({ navigation }: ResetPasswordProps) => {
-  const { colors, fonts, spacing } = useTheme();
-  const styles = useStyles(colors, fonts, spacing);
+  const { colors } = useTheme();
+  const styles = useStyles(colors);
+  const insets = useSafeAreaInsets();
   const [forgotPassword, { isLoading }] = useForgotPasswordMutation();
 
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [submitAttempted, setSubmitAttempted] = useState(false);
+
+  const pickerTopInset =
+    Platform.OS === 'android' ? Math.max(insets.top, 48) : 0;
 
   const formik = useFormik({
     initialValues: { number: '' },
@@ -99,123 +111,141 @@ const ResetPassword = ({ navigation }: ResetPasswordProps) => {
     formik.handleSubmit();
   };
 
+  const openCountryPicker = () => {
+    Keyboard.dismiss();
+    setShowCountryPicker(true);
+  };
+
   return (
-    <ScreenSafeArea style={{ backgroundColor: colors.primary }}>
-      <View style={{ paddingTop: 60, flex: 1 }}>
-        <LogoView />
-
-        <KeyboardAwareScrollView
-          style={styles.bottomView}
-          contentContainerStyle={{ paddingBottom: 72, flexGrow: 1 }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          enableOnAndroid
-          enableAutomaticScroll
-          extraScrollHeight={Platform.OS === 'android' ? 100 : 40}
-          extraHeight={Platform.OS === 'android' ? 140 : 60}
-          keyboardOpeningTime={0}
-          enableResetScrollToCoords={false}
-        >
-          <Text style={styles.title}>Forgot Password</Text>
-
-          <AppText
-            variant="body"
-            style={{ textAlign: 'center', marginBottom: 25 }}
-          >
+    <>
+      <AuthFormCard
+        title="Forgot Password"
+        subtitle={
+          <AppText variant="body" style={{ textAlign: 'center' }}>
             Enter your registered phone number to{'\n'}reset your account
             password.
           </AppText>
+        }
+      >
+        <View
+          style={[
+            styles.phoneRow,
+            {
+              borderColor: showError ? colors.danger : colors.inputBorder,
+            },
+          ]}
+        >
+          <FlagButton
+            countryCode={country.cca2}
+            withEmoji
+            withCallingCodeButton
+            withFlagButton
+            placeholder=""
+            onOpen={openCountryPicker}
+          />
 
+          <TextInput
+            style={[styles.phoneInput, { color: colors.text }]}
+            placeholder="Mobile Number *"
+            placeholderTextColor={colors.placeholder}
+            keyboardType="phone-pad"
+            value={formik.values.number}
+            onChangeText={formik.handleChange('number')}
+            onBlur={formik.handleBlur('number')}
+          />
+        </View>
+        <FieldError message={showError} />
+
+        <View style={{ marginTop: 24 }}>
+          <PrimaryButton
+            onPress={handleSubmit}
+            title="Reset Password"
+            loading={isLoading}
+            disabled={isLoading}
+          />
+
+          <AppText
+            variant="body"
+            style={{ alignSelf: 'center', marginTop: 24 }}
+          >
+            Back to
+            <AppText
+              onPress={() => navigation.goBack()}
+              variant="heading"
+              style={{ fontSize: 14 }}
+              color={colors.primary}
+            >
+              {' '}
+              Sign In
+            </AppText>
+          </AppText>
+        </View>
+      </AuthFormCard>
+
+      <CountryCodePicker
+        countryCode={country.cca2}
+        visible={showCountryPicker}
+        onClose={() => setShowCountryPicker(false)}
+        onOpen={openCountryPicker}
+        onSelect={value => {
+          setCountry(value);
+          setShowCountryPicker(false);
+        }}
+        withAlphaFilter
+        withFilter
+        withCallingCode
+        withCloseButton
+        withEmoji
+        withFlag
+        renderFlagButton={() => null}
+        modalProps={
+          Platform.OS === 'android'
+            ? { statusBarTranslucent: true, animationType: 'slide' }
+            : { animationType: 'slide' }
+        }
+        flatListProps={
+          {
+            keyboardShouldPersistTaps: 'handled',
+          } as unknown as React.ComponentProps<typeof CountryPicker>['flatListProps']
+        }
+        theme={{
+          backgroundColor: colors.card,
+          onBackgroundTextColor: colors.text,
+          fontSize: 16,
+          filterPlaceholderTextColor: colors.placeholder,
+        }}
+        closeButtonStyle={{ marginTop: pickerTopInset }}
+        renderCountryFilter={props => (
           <View
             style={[
-              styles.phoneRow,
-              {
-                borderColor: showError ? colors.danger : colors.inputBorder,
-              },
+              styles.countrySearchWrap,
+              { marginTop: pickerTopInset, borderColor: colors.inputBorder },
             ]}
           >
-            <TouchableOpacity onPress={() => setShowCountryPicker(true)}>
-              <CountryPicker
-                countryCode={country.cca2}
-                visible={showCountryPicker}
-                onClose={() => setShowCountryPicker(false)}
-                withAlphaFilter
-                withFilter
-                withCallingCode
-                withCallingCodeButton
-                withCloseButton
-                withEmoji
-                withFlag
-                withFlagButton
-                onSelect={value => setCountry(value)}
-              />
-            </TouchableOpacity>
-
             <TextInput
-              style={[styles.phoneInput, { color: colors.text }]}
-              placeholder="Mobile Number *"
+              value={props.value}
+              onChangeText={text =>
+                props.onChangeText?.(text.replace(/^\+/, ''))
+              }
+              onFocus={props.onFocus}
+              onBlur={props.onBlur}
+              placeholder="Search country or dialing code"
               placeholderTextColor={colors.placeholder}
-              keyboardType="phone-pad"
-              value={formik.values.number}
-              onChangeText={formik.handleChange('number')}
-              onBlur={formik.handleBlur('number')}
+              autoCorrect={false}
+              autoCapitalize="none"
+              style={[styles.countrySearch, { color: colors.text }]}
             />
           </View>
-          <FieldError message={showError} />
-
-          <View style={{ marginTop: 24 }}>
-            <PrimaryButton
-              onPress={handleSubmit}
-              title="Reset Password"
-              loading={isLoading}
-              disabled={isLoading}
-            />
-
-            <AppText
-              variant="body"
-              style={{ alignSelf: 'center', marginTop: 24 }}
-            >
-              Back to
-              <AppText
-                onPress={() => navigation.goBack()}
-                variant="heading"
-                style={{ fontSize: 14 }}
-                color={colors.primary}
-              >
-                {' '}
-                Sign In
-              </AppText>
-            </AppText>
-          </View>
-        </KeyboardAwareScrollView>
-      </View>
-    </ScreenSafeArea>
+        )}
+      />
+    </>
   );
 };
 
 export default ResetPassword;
 
-const useStyles = (
-  colors: Theme['colors'],
-  fonts: Theme['fonts'],
-  spacing: Theme['spacing'],
-) =>
+const useStyles = (colors: Theme['colors']) =>
   StyleSheet.create({
-    bottomView: {
-      backgroundColor: colors.card,
-      padding: spacing.padding,
-      borderTopEndRadius: 50,
-      borderTopStartRadius: 50,
-      marginTop: 40,
-      flex: 1,
-    },
-    title: {
-      fontSize: 24,
-      textAlign: 'center',
-      color: colors.text,
-      ...fonts.semiBold,
-      marginBottom: 16,
-    },
     phoneRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -230,5 +260,18 @@ const useStyles = (
       flex: 1,
       fontSize: 15,
       paddingVertical: 8,
+    },
+    countrySearchWrap: {
+      flex: 1,
+      marginRight: 12,
+      marginBottom: 8,
+      borderWidth: 1,
+      borderRadius: 8,
+      backgroundColor: colors.card,
+    },
+    countrySearch: {
+      height: 48,
+      paddingHorizontal: 12,
+      fontSize: 16,
     },
   });

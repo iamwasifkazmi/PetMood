@@ -2,7 +2,7 @@ import {
   BottomSheetBackdrop,
   BottomSheetBackdropProps,
   BottomSheetModal,
-  BottomSheetView,
+  BottomSheetScrollView,
 } from '@gorhom/bottom-sheet';
 import React, {
   forwardRef,
@@ -11,7 +11,9 @@ import React, {
   useMemo,
   useRef,
 } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeBottomPadding } from '../../hooks/useSafeBottomPadding';
 
 export type GlobalBottomSheetRef = {
   expand: () => void;
@@ -24,19 +26,30 @@ interface Props {
   snapPoints?: string[] | number[];
   children: React.ReactNode;
   showHandle?: boolean;
+  /** Size the sheet to its content, capped near the top of the screen. */
+  enableDynamicSizing?: boolean;
 }
 
 /**
  * Modal-based sheet so a closed sheet never blocks touches
  * (fixes Android freeze after opening screens like Settings).
+ * Bottom inset keeps actions above the Android navigation bar.
  */
 const GlobalBottomSheet = forwardRef<GlobalBottomSheetRef, Props>(
   (
-    { snapPoints = ['35%'], children, showHandle = false },
+    {
+      snapPoints = ['35%'],
+      children,
+      showHandle = false,
+      enableDynamicSizing = false,
+    },
     ref,
   ) => {
     const modalRef = useRef<BottomSheetModal>(null);
     const memoizedSnapPoints = useMemo(() => snapPoints, [snapPoints]);
+    const insets = useSafeAreaInsets();
+    const { height } = useWindowDimensions();
+    const bottomInset = useSafeBottomPadding(0);
 
     useImperativeHandle(ref, () => ({
       expand: () => modalRef.current?.present(),
@@ -67,14 +80,23 @@ const GlobalBottomSheet = forwardRef<GlobalBottomSheetRef, Props>(
     return (
       <BottomSheetModal
         ref={modalRef}
-        snapPoints={memoizedSnapPoints}
+        snapPoints={enableDynamicSizing ? undefined : memoizedSnapPoints}
+        enableDynamicSizing={enableDynamicSizing}
+        maxDynamicContentSize={Math.round(height - insets.top - bottomInset - 24)}
+        bottomInset={bottomInset}
+        topInset={insets.top}
         backdropComponent={renderBackdrop}
         enablePanDownToClose
         handleComponent={showHandle ? undefined : null}
+        keyboardBehavior="interactive"
       >
-        <BottomSheetView style={styles.contentContainer}>
+        <BottomSheetScrollView
+          style={enableDynamicSizing ? undefined : styles.scroll}
+          contentContainerStyle={styles.contentContainer}
+          keyboardShouldPersistTaps="handled"
+        >
           {children}
-        </BottomSheetView>
+        </BottomSheetScrollView>
       </BottomSheetModal>
     );
   },
@@ -83,9 +105,12 @@ const GlobalBottomSheet = forwardRef<GlobalBottomSheetRef, Props>(
 export default GlobalBottomSheet;
 
 const styles = StyleSheet.create({
+  scroll: {
+    flex: 1,
+  },
   contentContainer: {
     padding: 16,
     paddingTop: 24,
-    paddingBottom: 28,
+    paddingBottom: 20,
   },
 });

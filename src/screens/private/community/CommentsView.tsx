@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   FlatList,
   Image,
+  Modal,
+  Pressable,
   StyleSheet,
   TextInput,
   TouchableOpacity,
   View,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   ActivityIndicator,
 } from 'react-native';
 import { useSelector } from 'react-redux';
@@ -17,7 +17,6 @@ import { useTheme } from '../../../hooks/useTheme';
 import { Theme } from '../../../common/theme';
 import icons from '../../../assets/icons/icons';
 import images from '../../../assets/images';
-import AntDesign from 'react-native-vector-icons/AntDesign';
 import AppText from '../../../components/Text/AppText';
 import moment from 'moment';
 import { RootState } from '../../../features/store';
@@ -27,13 +26,18 @@ import { showSuccessMsg } from '../../../utils/flashMessage';
 
 interface Props {
   onClose: () => void;
-  onComment: (comment: string) => void;
+  onComment: (comment: string) => void | Promise<void>;
   loading?: boolean;
   comments: getCommentRes[];
   isCommenting?: boolean;
   postId?: string;
   commentErrorText?: string;
 }
+
+type MenuAction =
+  | { type: 'report'; reason: string }
+  | { type: 'block' };
+
 const CommentsView = ({
   onClose,
   onComment,
@@ -48,62 +52,60 @@ const CommentsView = ({
   const { user } = useSelector((state: RootState) => state.user);
 
   const [comment, setComment] = useState('');
+  const [menuComment, setMenuComment] = useState<getCommentRes | null>(null);
+  const [menuBusy, setMenuBusy] = useState(false);
   const [reportComment] = useReportCommentMutation();
   const [blockUser] = useBlockUserMutation();
+
+  const closeMenu = () => {
+    if (menuBusy) return;
+    setMenuComment(null);
+  };
+
+  const runMenuAction = async (action: MenuAction) => {
+    if (!postId || !menuComment) return;
+    setMenuBusy(true);
+    try {
+      if (action.type === 'report') {
+        await reportComment({
+          postId,
+          commentId: menuComment.id,
+          reason: action.reason,
+        }).unwrap();
+        showSuccessMsg("Thanks, we’ll review this.");
+      } else {
+        await blockUser({
+          targetUid: menuComment.authorId,
+          reason: 'Harassment',
+          postIdForCommentsPatch: postId,
+        }).unwrap();
+        showSuccessMsg('User blocked.');
+      }
+      setMenuComment(null);
+    } catch {
+      // axiosBaseQuery already toasts API errors
+    } finally {
+      setMenuBusy(false);
+    }
+  };
 
   const onMenuPress = (commentItem: getCommentRes) => {
     if (!postId) return;
     if (commentItem.authorId === user?.uid) {
       return;
     }
-    Alert.alert('Actions', 'Select a reason', [
-      {
-        text: 'Report: Harassment',
-        onPress: async () => {
-          await reportComment({
-            postId,
-            commentId: commentItem.id,
-            reason: 'Harassment',
-          }).unwrap();
-          showSuccessMsg("Thanks, we’ll review this.");
-        },
-      },
-      {
-        text: 'Report: Spam',
-        onPress: async () => {
-          await reportComment({
-            postId,
-            commentId: commentItem.id,
-            reason: 'Spam',
-          }).unwrap();
-          showSuccessMsg("Thanks, we’ll review this.");
-        },
-      },
-      {
-        text: 'Report: Other',
-        onPress: async () => {
-          await reportComment({
-            postId,
-            commentId: commentItem.id,
-            reason: 'Other',
-          }).unwrap();
-          showSuccessMsg("Thanks, we’ll review this.");
-        },
-      },
-      {
-        text: 'Block User',
-        style: 'destructive',
-        onPress: async () => {
-          await blockUser({
-            targetUid: commentItem.authorId,
-            reason: 'Harassment',
-            postIdForCommentsPatch: postId,
-          }).unwrap();
-          showSuccessMsg('User blocked.');
-        },
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+    setMenuComment(commentItem);
+  };
+
+  const handleSendComment = async () => {
+    const text = comment.trim();
+    if (!text || isCommenting) return;
+    try {
+      await onComment(text);
+      setComment('');
+    } catch {
+      // parent sets inline error; keep draft text for retry
+    }
   };
 
   const renderComment = ({ item }: { item: getCommentRes }) => (
@@ -209,9 +211,9 @@ const CommentsView = ({
           <TouchableOpacity
             style={styles.sendBtn}
             onPress={() => {
-              onComment(comment);
-              setComment('');
+              void handleSendComment();
             }}
+            disabled={isCommenting || !comment.trim()}
           >
             {isCommenting ? (
               <ActivityIndicator color={colors.card} size="small" />
@@ -233,6 +235,59 @@ const CommentsView = ({
           {commentErrorText}
         </AppText>
       )}
+
+      <Modal
+        visible={!!menuComment}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMenu}
+      >
+        <Pressable style={styles.menuBackdrop} onPress={closeMenu}>
+          <Pressable
+            style={[styles.menuSheet, { backgroundColor: colors.card }]}
+            onPress={e => e.stopPropagation()}
+          >
+            <AppText
+              fontWeight="semiBold"
+              size={16}
+              style={{ textAlign: 'center', marginBottom: 12 }}
+            >
+              Comment actions
+            </AppText>
+            {(
+              [
+                { label: 'Report: Harassment', action: { type: 'report', reason: 'Harassment' } as MenuAction },
+                { label: 'Report: Spam', action: { type: 'report', reason: 'Spam' } as MenuAction },
+                { label: 'Report: Other', action: { type: 'report', reason: 'Other' } as MenuAction },
+                { label: 'Block User', action: { type: 'block' } as MenuAction },
+              ] as const
+            ).map(item => (
+              <TouchableOpacity
+                key={item.label}
+                style={styles.menuItem}
+                disabled={menuBusy}
+                onPress={() => void runMenuAction(item.action)}
+              >
+                <AppText
+                  size={15}
+                  color={item.action.type === 'block' ? colors.danger : colors.text}
+                >
+                  {item.label}
+                </AppText>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={[styles.menuItem, styles.menuCancel]}
+              disabled={menuBusy}
+              onPress={closeMenu}
+            >
+              <AppText fontWeight="semiBold" size={15} color={colors.primary}>
+                Cancel
+              </AppText>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -323,6 +378,28 @@ const useStyles = (
       borderRadius: 18,
       backgroundColor: colors.primary,
       justifyContent: 'center',
+      alignItems: 'center',
+    },
+    menuBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.45)',
+      justifyContent: 'flex-end',
+    },
+    menuSheet: {
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      paddingTop: 16,
+      paddingBottom: Platform.OS === 'ios' ? 28 : 16,
+      paddingHorizontal: 16,
+    },
+    menuItem: {
+      paddingVertical: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    menuCancel: {
+      borderBottomWidth: 0,
+      marginTop: 4,
       alignItems: 'center',
     },
   });

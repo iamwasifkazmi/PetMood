@@ -74,6 +74,7 @@ export const cummunityApiSlice = createApi({
         url: `community/comments/create`,
         method: 'post',
         data: { postId, content },
+        headers: { 'Content-Type': 'application/json' },
       }),
       async onQueryStarted({ postId }, { dispatch, queryFulfilled }) {
         try {
@@ -130,9 +131,7 @@ export const cummunityApiSlice = createApi({
           url: `community/posts/create`,
           method: 'post',
           data: formData,
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
+          // Do NOT set Content-Type — RN/axios must add multipart boundary
         };
       },
 

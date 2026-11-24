@@ -7,13 +7,16 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useFormik } from 'formik';
 import { showMessage } from 'react-native-flash-message';
-import CountryPicker, { Country } from 'react-native-country-picker-modal';
+import CountryPicker, {
+  Country,
+  FlagButton,
+} from 'react-native-country-picker-modal';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import parsePhoneNumberFromString from 'libphonenumber-js';
 
 import icons from '../../../assets/icons/icons';
@@ -24,8 +27,7 @@ import {
 import { Theme } from '../../../common/theme';
 import PrimaryInput from '../../../components/inputs/PrimaryInput';
 import FieldError from '../../../components/inputs/FieldError';
-import LogoView from '../../../components/views/LogoView';
-import ScreenSafeArea from '../../../components/layout/ScreenSafeArea';
+import AuthFormCard from '../../../components/layout/AuthFormCard';
 import { useTheme } from '../../../hooks/useTheme';
 import { CreateAccountProps, RouteName } from '../../../navigation/types';
 import PrimaryButton from '../../../components/buttons/PrimaryButton';
@@ -49,12 +51,19 @@ const DEFAULT_COUNTRY: Country = {
 
 type Step = 1 | 2;
 
+const CountryCodePicker = CountryPicker as React.ComponentType<
+  React.ComponentProps<typeof CountryPicker> & {
+    closeButtonStyle?: { marginTop: number };
+  }
+>;
+
 const STEP1_FIELDS = ['fullName', 'email', 'number'] as const;
 const STEP2_FIELDS = ['password', 'confirmPassword', 'agreeTerms'] as const;
 
 const CreateAccount = ({ navigation }: CreateAccountProps) => {
-  const { colors, fonts, spacing } = useTheme();
-  const styles = useStyles(colors, fonts, spacing);
+  const { colors, fonts } = useTheme();
+  const styles = useStyles(colors);
+  const insets = useSafeAreaInsets();
   const scrollRef = useRef<KeyboardAwareScrollView>(null);
 
   const [register, { isLoading }] = useRegisterUserMutation();
@@ -62,6 +71,9 @@ const CreateAccount = ({ navigation }: CreateAccountProps) => {
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [step, setStep] = useState<Step>(1);
+
+  const pickerTopInset =
+    Platform.OS === 'android' ? Math.max(insets.top, 48) : 0;
 
   const formik = useFormik({
     initialValues: {
@@ -221,253 +233,269 @@ const CreateAccount = ({ navigation }: CreateAccountProps) => {
     }
   };
 
-  return (
-    <ScreenSafeArea style={{ backgroundColor: colors.primary }}>
-      <View style={{ paddingTop: 48, flex: 1 }}>
-        <LogoView />
+  const openCountryPicker = () => {
+    Keyboard.dismiss();
+    setShowCountryPicker(true);
+  };
 
-        <KeyboardAwareScrollView
-          ref={scrollRef}
-          style={styles.bottomView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          enableOnAndroid
-          enableAutomaticScroll
-          extraScrollHeight={Platform.OS === 'android' ? 100 : 40}
-          extraHeight={Platform.OS === 'android' ? 140 : 60}
-          keyboardOpeningTime={0}
-          enableResetScrollToCoords={false}
-          nestedScrollEnabled
-        >
-          <Text style={styles.title}>Create Your Account</Text>
+  return (
+    <>
+      <AuthFormCard
+        scrollRef={scrollRef}
+        title="Create Your Account"
+        subtitle={
           <AppText
             size={13}
             color={colors.caption}
-            style={{ textAlign: 'center', marginBottom: 16 }}
+            style={{ textAlign: 'center' }}
           >
             Step {step} of 2
             {step === 1 ? ' · Your details' : ' · Password & terms'}
           </AppText>
+        }
+      >
+        {step === 1 ? (
+          <View style={{ gap: 4 }}>
+            <PrimaryInput
+              leftImageSource={icons.profile}
+              placeholder="Full Name"
+              required
+              value={formik.values.fullName}
+              onChangeText={formik.handleChange('fullName')}
+              onBlur={formik.handleBlur('fullName')}
+              error={showError('fullName')}
+              returnKeyType="next"
+              autoCapitalize="words"
+            />
 
-          {step === 1 ? (
-            <View style={{ gap: 4 }}>
-              <PrimaryInput
-                leftImageSource={icons.profile}
-                placeholder="Full Name"
-                required
-                value={formik.values.fullName}
-                onChangeText={formik.handleChange('fullName')}
-                onBlur={formik.handleBlur('fullName')}
-                error={showError('fullName')}
-                returnKeyType="next"
-                autoCapitalize="words"
-              />
+            <PrimaryInput
+              leftImageSource={icons.email}
+              placeholder="Email"
+              required
+              keyboardType="email-address"
+              value={formik.values.email}
+              onChangeText={text =>
+                formik.setFieldValue('email', text.toLowerCase())
+              }
+              onBlur={formik.handleBlur('email')}
+              autoCapitalize="none"
+              autoCorrect={false}
+              error={showError('email')}
+              returnKeyType="next"
+            />
 
-              <PrimaryInput
-                leftImageSource={icons.email}
-                placeholder="Email"
-                required
-                keyboardType="email-address"
-                value={formik.values.email}
-                onChangeText={text =>
-                  formik.setFieldValue('email', text.toLowerCase())
+            <View style={{ marginTop: 10 }}>
+              <View
+                style={[
+                  styles.phoneRow,
+                  {
+                    borderColor: showError('number')
+                      ? colors.danger
+                      : colors.inputBorder,
+                  },
+                ]}
+              >
+                <FlagButton
+                  countryCode={country.cca2}
+                  withEmoji
+                  withCallingCodeButton
+                  withFlagButton
+                  placeholder=""
+                  onOpen={openCountryPicker}
+                />
+
+                <TextInput
+                  style={[styles.phoneInput, { color: colors.text }]}
+                  placeholder="Mobile Number *"
+                  placeholderTextColor={colors.placeholder}
+                  keyboardType="phone-pad"
+                  value={formik.values.number}
+                  onChangeText={formik.handleChange('number')}
+                  onBlur={formik.handleBlur('number')}
+                  returnKeyType="done"
+                  onSubmitEditing={() => void goToStep2()}
+                />
+              </View>
+              <FieldError message={showError('number')} />
+            </View>
+
+            <View style={{ marginTop: 28 }}>
+              <PrimaryButton onPress={() => void goToStep2()} title="Next" />
+
+              <AppText
+                variant="body"
+                style={{ alignSelf: 'center', marginTop: 24 }}
+              >
+                Already have an account?
+                <AppText
+                  onPress={() => navigation.navigate(RouteName.Login)}
+                  variant="heading"
+                  style={{ fontSize: 14 }}
+                  color={colors.primary}
+                >
+                  {' '}
+                  Sign In
+                </AppText>
+              </AppText>
+            </View>
+          </View>
+        ) : (
+          <View style={{ gap: 4 }}>
+            <PrimaryInput
+              leftImageSource={icons.lock}
+              placeholder="Password"
+              required
+              rightImageSource={icons.eye}
+              secureTextEntry
+              value={formik.values.password}
+              onChangeText={formik.handleChange('password')}
+              onBlur={formik.handleBlur('password')}
+              error={showError('password')}
+              returnKeyType="next"
+              textContentType="newPassword"
+              autoComplete="password-new"
+            />
+            {!showError('password') ? (
+              <AppText
+                size={12}
+                color={colors.caption}
+                style={{ marginLeft: 4 }}
+              >
+                {PASSWORD_REQUIREMENTS_MSG}
+              </AppText>
+            ) : null}
+
+            <PrimaryInput
+              leftImageSource={icons.lock}
+              placeholder="Confirm Password"
+              required
+              rightImageSource={icons.eye}
+              secureTextEntry
+              value={formik.values.confirmPassword}
+              onChangeText={formik.handleChange('confirmPassword')}
+              onBlur={formik.handleBlur('confirmPassword')}
+              error={showError('confirmPassword')}
+              returnKeyType="done"
+              textContentType="newPassword"
+              autoComplete="password-new"
+            />
+
+            <View style={styles.termsRow}>
+              <CheckBox
+                boxType="square"
+                disabled={false}
+                style={styles.checkbox}
+                onFillColor={colors.primary}
+                onTintColor={colors.primary}
+                tintColor={colors.border}
+                onCheckColor={'white'}
+                value={formik.values.agreeTerms}
+                onChange={e =>
+                  formik.setFieldValue('agreeTerms', e.nativeEvent.value)
                 }
-                onBlur={formik.handleBlur('email')}
-                autoCapitalize="none"
-                autoCorrect={false}
-                error={showError('email')}
-                returnKeyType="next"
               />
-
-              <View style={{ marginTop: 10 }}>
-                <View
-                  style={[
-                    styles.phoneRow,
-                    {
-                      borderColor: showError('number')
-                        ? colors.danger
-                        : colors.inputBorder,
-                    },
-                  ]}
+              <Text style={{ ...fonts.regular, flex: 1, flexWrap: 'wrap' }}>
+                I agree to the{' '}
+                <Text
+                  style={{ ...fonts.bold, color: colors.primary }}
+                  onPress={() => openLegalUrl(TERMS_AND_CONDITIONS_URL)}
                 >
-                  <TouchableOpacity onPress={() => setShowCountryPicker(true)}>
-                    <CountryPicker
-                      countryCode={country.cca2}
-                      visible={showCountryPicker}
-                      onClose={() => setShowCountryPicker(false)}
-                      withAlphaFilter
-                      withFilter
-                      withCallingCode
-                      withCallingCodeButton
-                      withCloseButton
-                      withEmoji
-                      withFlag
-                      withFlagButton
-                      onSelect={value => setCountry(value)}
-                    />
-                  </TouchableOpacity>
-
-                  <TextInput
-                    style={[styles.phoneInput, { color: colors.text }]}
-                    placeholder="Mobile Number *"
-                    placeholderTextColor={colors.placeholder}
-                    keyboardType="phone-pad"
-                    value={formik.values.number}
-                    onChangeText={formik.handleChange('number')}
-                    onBlur={formik.handleBlur('number')}
-                    returnKeyType="done"
-                    onSubmitEditing={() => void goToStep2()}
-                  />
-                </View>
-                <FieldError message={showError('number')} />
-              </View>
-
-              <View style={{ marginTop: 28 }}>
-                <PrimaryButton onPress={() => void goToStep2()} title="Next" />
-
-                <AppText
-                  variant="body"
-                  style={{ alignSelf: 'center', marginTop: 24 }}
+                  Terms & Conditions
+                </Text>{' '}
+                and{' '}
+                <Text
+                  style={{ ...fonts.bold, color: colors.primary }}
+                  onPress={() => openLegalUrl(PRIVACY_POLICY_WEB_URL)}
                 >
-                  Already have an account?
-                  <AppText
-                    onPress={() => navigation.navigate(RouteName.Login)}
-                    variant="heading"
-                    style={{ fontSize: 14 }}
-                    color={colors.primary}
-                  >
-                    {' '}
-                    Sign In
-                  </AppText>
-                </AppText>
-              </View>
-            </View>
-          ) : (
-            <View style={{ gap: 4 }}>
-              <PrimaryInput
-                leftImageSource={icons.lock}
-                placeholder="Password"
-                required
-                rightImageSource={icons.eye}
-                secureTextEntry
-                value={formik.values.password}
-                onChangeText={formik.handleChange('password')}
-                onBlur={formik.handleBlur('password')}
-                error={showError('password')}
-                returnKeyType="next"
-                textContentType="newPassword"
-                autoComplete="password-new"
-              />
-              {!showError('password') ? (
-                <AppText
-                  size={12}
-                  color={colors.caption}
-                  style={{ marginLeft: 4 }}
-                >
-                  {PASSWORD_REQUIREMENTS_MSG}
-                </AppText>
-              ) : null}
-
-              <PrimaryInput
-                leftImageSource={icons.lock}
-                placeholder="Confirm Password"
-                required
-                rightImageSource={icons.eye}
-                secureTextEntry
-                value={formik.values.confirmPassword}
-                onChangeText={formik.handleChange('confirmPassword')}
-                onBlur={formik.handleBlur('confirmPassword')}
-                error={showError('confirmPassword')}
-                returnKeyType="done"
-                textContentType="newPassword"
-                autoComplete="password-new"
-              />
-
-              <View style={styles.termsRow}>
-                <CheckBox
-                  boxType="square"
-                  disabled={false}
-                  style={styles.checkbox}
-                  onFillColor={colors.primary}
-                  onTintColor={colors.primary}
-                  tintColor={colors.border}
-                  onCheckColor={'white'}
-                  value={formik.values.agreeTerms}
-                  onChange={e =>
-                    formik.setFieldValue('agreeTerms', e.nativeEvent.value)
-                  }
-                />
-                <Text style={{ ...fonts.regular, flex: 1, flexWrap: 'wrap' }}>
-                  I agree to the{' '}
-                  <Text
-                    style={{ ...fonts.bold, color: colors.primary }}
-                    onPress={() => openLegalUrl(TERMS_AND_CONDITIONS_URL)}
-                  >
-                    Terms & Conditions
-                  </Text>{' '}
-                  and{' '}
-                  <Text
-                    style={{ ...fonts.bold, color: colors.primary }}
-                    onPress={() => openLegalUrl(PRIVACY_POLICY_WEB_URL)}
-                  >
-                    Privacy Policy
-                  </Text>
-                  .
+                  Privacy Policy
                 </Text>
-              </View>
-              <FieldError message={showError('agreeTerms')} />
-
-              <View style={{ marginTop: 24, gap: 12 }}>
-                <PrimaryButton
-                  onPress={() => void handleCreateAccount()}
-                  title="Create Account"
-                  loading={isLoading}
-                  disabled={isLoading}
-                />
-                <PrimaryButton
-                  title="Back"
-                  type="outlined"
-                  onPress={goToStep1}
-                  disabled={isLoading}
-                />
-              </View>
+                .
+              </Text>
             </View>
-          )}
-        </KeyboardAwareScrollView>
-      </View>
-    </ScreenSafeArea>
+            <FieldError message={showError('agreeTerms')} />
+
+            <View style={{ marginTop: 24, gap: 12 }}>
+              <PrimaryButton
+                onPress={() => void handleCreateAccount()}
+                title="Create Account"
+                loading={isLoading}
+                disabled={isLoading}
+              />
+              <PrimaryButton
+                title="Back"
+                type="outlined"
+                onPress={goToStep1}
+                disabled={isLoading}
+              />
+            </View>
+          </View>
+        )}
+      </AuthFormCard>
+
+      <CountryCodePicker
+        countryCode={country.cca2}
+        visible={showCountryPicker}
+        onClose={() => setShowCountryPicker(false)}
+        onOpen={openCountryPicker}
+        onSelect={value => {
+          setCountry(value);
+          setShowCountryPicker(false);
+        }}
+        withAlphaFilter
+        withFilter
+        withCallingCode
+        withCloseButton
+        withEmoji
+        withFlag
+        renderFlagButton={() => null}
+        modalProps={
+          Platform.OS === 'android'
+            ? { statusBarTranslucent: true, animationType: 'slide' }
+            : { animationType: 'slide' }
+        }
+        flatListProps={
+          {
+            keyboardShouldPersistTaps: 'handled',
+          } as unknown as React.ComponentProps<typeof CountryPicker>['flatListProps']
+        }
+        theme={{
+          backgroundColor: colors.card,
+          onBackgroundTextColor: colors.text,
+          fontSize: 16,
+          filterPlaceholderTextColor: colors.placeholder,
+        }}
+        closeButtonStyle={{ marginTop: pickerTopInset }}
+        renderCountryFilter={props => (
+          <View
+            style={[
+              styles.countrySearchWrap,
+              { marginTop: pickerTopInset, borderColor: colors.inputBorder },
+            ]}
+          >
+            <TextInput
+              value={props.value}
+              onChangeText={text =>
+                props.onChangeText?.(text.replace(/^\+/, ''))
+              }
+              onFocus={props.onFocus}
+              onBlur={props.onBlur}
+              placeholder="Search country or dialing code"
+              placeholderTextColor={colors.placeholder}
+              autoCorrect={false}
+              autoCapitalize="none"
+              style={[styles.countrySearch, { color: colors.text }]}
+            />
+          </View>
+        )}
+      />
+    </>
   );
 };
 
 export default CreateAccount;
 
-const useStyles = (
-  colors: Theme['colors'],
-  fonts: Theme['fonts'],
-  spacing: Theme['spacing'],
-) =>
+const useStyles = (colors: Theme['colors']) =>
   StyleSheet.create({
-    bottomView: {
-      backgroundColor: colors.card,
-      paddingHorizontal: spacing.padding,
-      paddingTop: spacing.padding,
-      borderTopEndRadius: 50,
-      borderTopStartRadius: 50,
-      marginTop: 40,
-      flex: 1,
-    },
-    scrollContent: {
-      paddingBottom: 72,
-      flexGrow: 1,
-    },
-    title: {
-      fontSize: 24,
-      textAlign: 'center',
-      color: colors.text,
-      ...fonts.semiBold,
-      marginBottom: 8,
-    },
     phoneRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -493,5 +521,18 @@ const useStyles = (
       height: 20,
       marginRight: 10,
       marginLeft: 10,
+    },
+    countrySearchWrap: {
+      flex: 1,
+      marginRight: 12,
+      marginBottom: 8,
+      borderWidth: 1,
+      borderRadius: 8,
+      backgroundColor: colors.card,
+    },
+    countrySearch: {
+      height: 48,
+      paddingHorizontal: 12,
+      fontSize: 16,
     },
   });

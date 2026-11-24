@@ -1,17 +1,14 @@
 import { Formik } from 'formik';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Platform, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import {
   CodeField,
   useBlurOnFulfill,
 } from 'react-native-confirmation-code-field';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
-import { Theme } from '../../../common/theme';
 import AppText from '../../../components/Text/AppText';
 import CellCard from '../../../components/cards/CellICard';
 import FieldError from '../../../components/inputs/FieldError';
-import LogoView from '../../../components/views/LogoView';
-import ScreenSafeArea from '../../../components/layout/ScreenSafeArea';
+import AuthFormCard from '../../../components/layout/AuthFormCard';
 import { useTheme } from '../../../hooks/useTheme';
 import { CodeVerificationProps, RouteName } from '../../../navigation/types';
 import { showMessage } from 'react-native-flash-message';
@@ -35,8 +32,8 @@ function formatTimer(seconds: number): string {
 
 const CodeVerification = ({ navigation, route }: CodeVerificationProps) => {
   const { phoneNumber, isFromResetPassword } = route.params;
-  const { colors, fonts, spacing } = useTheme();
-  const styles = useStyles(colors, fonts, spacing);
+  const { colors, fonts } = useTheme();
+  const styles = useStyles();
 
   const [resendOtp] = useResendOtpMutation();
   const [resendForgotOtp] = useResendForgotPasswordOtpMutation();
@@ -148,39 +145,31 @@ const CodeVerification = ({ navigation, route }: CodeVerificationProps) => {
   };
 
   return (
-    <ScreenSafeArea style={{ backgroundColor: colors.primary }}>
-      <Formik
-        initialValues={{ code: '' }}
-        onSubmit={values => handleVerifyOtp(values.code)}
-      >
-        {formik => {
-          const codeInputRef = useBlurOnFulfill({
-            value: formik.values.code,
-            cellCount: CELL_COUNT,
-          });
+    <Formik
+      initialValues={{ code: '' }}
+      onSubmit={values => handleVerifyOtp(values.code)}
+    >
+      {formik => {
+        const codeInputRef = useBlurOnFulfill({
+          value: formik.values.code,
+          cellCount: CELL_COUNT,
+        });
 
-          useEffect(() => {
-            if (formik.values.code.length === CELL_COUNT && !isLoading && !forgotLoading) {
-              formik.handleSubmit();
-            }
-          }, [formik.values.code]);
+        useEffect(() => {
+          if (
+            formik.values.code.length === CELL_COUNT &&
+            !isLoading &&
+            !forgotLoading
+          ) {
+            formik.handleSubmit();
+          }
+        }, [formik.values.code]);
 
-          return (
-            <View style={{ paddingTop: 60, flex: 1 }}>
-              <LogoView />
-              <KeyboardAwareScrollView
-                style={styles.bottomView}
-                contentContainerStyle={{ paddingBottom: 72, flexGrow: 1 }}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                enableOnAndroid
-                enableAutomaticScroll
-                extraScrollHeight={Platform.OS === 'android' ? 100 : 40}
-                extraHeight={Platform.OS === 'android' ? 140 : 60}
-                keyboardOpeningTime={0}
-                enableResetScrollToCoords={false}
-              >
-                <AppText style={styles.title}>OTP Code</AppText>
+        return (
+          <AuthFormCard
+            title="OTP Code"
+            subtitle={
+              <View>
                 <AppText variant="body" style={{ textAlign: 'center' }}>
                   Enter the OTP code we sent to
                 </AppText>
@@ -191,7 +180,6 @@ const CodeVerification = ({ navigation, route }: CodeVerificationProps) => {
                 >
                   {maskedPhone}
                 </AppText>
-
                 <AppText
                   size={13}
                   color={colors.caption}
@@ -201,80 +189,61 @@ const CodeVerification = ({ navigation, route }: CodeVerificationProps) => {
                     ? `Code expires in ${formatTimer(expirySeconds)}`
                     : 'OTP expired — request a new code'}
                 </AppText>
+              </View>
+            }
+          >
+            <CodeField
+              autoFocus
+              ref={codeInputRef}
+              value={formik.values.code}
+              onChangeText={text => {
+                setOtpError(null);
+                formik.setFieldValue('code', text);
+              }}
+              cellCount={CELL_COUNT}
+              keyboardType="number-pad"
+              rootStyle={styles.codeFieldRoot}
+              renderCell={options => (
+                <CellCard key={'cellItem-' + options.index} {...options} />
+              )}
+            />
+            <FieldError message={otpError} />
 
-                <CodeField
-                  autoFocus
-                  ref={codeInputRef}
-                  value={formik.values.code}
-                  onChangeText={text => {
-                    setOtpError(null);
-                    formik.setFieldValue('code', text);
-                  }}
-                  cellCount={CELL_COUNT}
-                  keyboardType="number-pad"
-                  rootStyle={styles.codeFieldRoot}
-                  renderCell={options => (
-                    <CellCard key={'cellItem-' + options.index} {...options} />
-                  )}
-                />
-                <FieldError message={otpError} />
-
-                <AppText
-                  style={{
-                    ...fonts.regular,
-                    marginTop: 32,
-                    textAlign: 'center',
-                  }}
-                  variant="body"
-                >
-                  {resendCooldown > 0 ? (
-                    `Resend available in ${formatTimer(resendCooldown)}`
-                  ) : (
-                    <>
-                      If you didn’t receive the code please{' '}
-                      <AppText
-                        style={{ ...fonts.bold, color: colors.primary }}
-                        onPress={handleResend}
-                      >
-                        click here
-                      </AppText>
-                    </>
-                  )}
-                </AppText>
-              </KeyboardAwareScrollView>
-            </View>
-          );
-        }}
-      </Formik>
-    </ScreenSafeArea>
+            <AppText
+              style={{
+                ...fonts.regular,
+                marginTop: 32,
+                textAlign: 'center',
+              }}
+              variant="body"
+            >
+              {resendCooldown > 0 ? (
+                `Resend available in ${formatTimer(resendCooldown)}`
+              ) : (
+                <>
+                  If you didn’t receive the code please{' '}
+                  <AppText
+                    style={{ ...fonts.bold, color: colors.primary }}
+                    onPress={handleResend}
+                  >
+                    click here
+                  </AppText>
+                </>
+              )}
+            </AppText>
+          </AuthFormCard>
+        );
+      }}
+    </Formik>
   );
 };
 
 export default CodeVerification;
 
-const useStyles = (
-  colors: Theme['colors'],
-  fonts: Theme['fonts'],
-  spacing: Theme['spacing'],
-) =>
+const useStyles = () =>
   StyleSheet.create({
-    bottomView: {
-      backgroundColor: colors.card,
-      padding: spacing.padding,
-      borderTopEndRadius: 50,
-      borderTopStartRadius: 50,
-      marginTop: 40,
-      flex: 1,
-    },
-    title: {
-      fontSize: 24,
-      textAlign: 'center',
-      color: colors.text,
-      ...fonts.semiBold,
-      marginBottom: 16,
-    },
     codeFieldRoot: {
-      marginTop: 20,
+      marginTop: 8,
       justifyContent: 'center',
     },
   });

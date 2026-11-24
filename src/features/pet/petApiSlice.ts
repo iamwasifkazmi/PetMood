@@ -7,23 +7,23 @@ export const petApiSlice = createApi({
   reducerPath: 'petApi',
   tagTypes: ['Pets'],
   endpoints: build => ({
-    createPet: build.mutation<createPetRes, FormData>({
-      query: formData => {
-        if ((formData as any)._parts) {
-          (formData as any)._parts.forEach(([key, value]: any) => {
-            console.log(key, value);
-          });
-        } else {
-          console.log(formData);
-        }
+    createPet: build.mutation<createPetRes, FormData | CreatePetArg>({
+      query: arg => {
+        const looksLikeFormData =
+          typeof FormData !== 'undefined' &&
+          (arg instanceof FormData ||
+            Object.prototype.toString.call(arg) === '[object FormData]' ||
+            Array.isArray((arg as any)._parts));
 
         return {
           url: 'pets',
           method: 'POST',
-          data: formData,
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
+          data: arg,
+          // Text-only: JSON. Photo: FormData — do NOT set multipart Content-Type
+          // (RN must add the boundary; axios urlencoded default breaks Android).
+          headers: looksLikeFormData
+            ? undefined
+            : { 'Content-Type': 'application/json' },
         };
       },
 
@@ -91,22 +91,27 @@ export const petApiSlice = createApi({
     updatePetProfile: build.mutation<PetHistoryRes, { id: string; formData: FormData } | updatePetProfileArg>({
       query: arg => {
         // Check if it's FormData format { id, formData }
-        if ('formData' in arg && arg.formData instanceof FormData) {
+        if (
+          'formData' in arg &&
+          arg.formData &&
+          (arg.formData instanceof FormData ||
+            Array.isArray((arg.formData as any)._parts))
+        ) {
           return {
             url: `pets/${arg.id}`,
             method: 'PATCH',
             data: arg.formData,
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
+            // Do NOT set Content-Type — RN/axios must add multipart boundary
           };
         }
         
-        // Otherwise it's the regular updatePetProfileArg object
+        // Otherwise it's the regular updatePetProfileArg object (JSON)
+        const { id, ...body } = arg as updatePetProfileArg;
         return {
-          url: `pets/${(arg as updatePetProfileArg).id}`,
+          url: `pets/${id}`,
           method: 'PATCH',
-          data: arg,
+          data: body,
+          headers: { 'Content-Type': 'application/json' },
         };
       },
       async onQueryStarted(arg, { dispatch, queryFulfilled }) {

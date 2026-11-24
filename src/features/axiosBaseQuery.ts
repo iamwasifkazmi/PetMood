@@ -2,9 +2,28 @@ import type { BaseQueryFn } from '@reduxjs/toolkit/query';
 import type { AxiosError, AxiosRequestConfig } from 'axios';
 import axios from 'axios';
 import { showErrMsg } from '../utils/flashMessage';
+import { getApiErrorMessage } from '../utils/validations';
 import { getValidIdToken } from '../services/firebaseTokenService';
 import { performLogout } from '../services/authSession';
 import { isQuotaOrPaywallError } from '../utils/subscriptionQuotas';
+
+/** RN Android release builds often break `instanceof FormData` across bundles. */
+function isFormDataLike(data: unknown): boolean {
+  if (!data || typeof data !== 'object') {
+    return false;
+  }
+  if (typeof FormData !== 'undefined' && data instanceof FormData) {
+    return true;
+  }
+  if (Object.prototype.toString.call(data) === '[object FormData]') {
+    return true;
+  }
+  // react-native FormData polyfill
+  if (Array.isArray((data as { _parts?: unknown })._parts)) {
+    return true;
+  }
+  return false;
+}
 
 const axiosBaseQuery =
   (
@@ -44,8 +63,7 @@ const axiosBaseQuery =
         '\nreq-params: ' + JSON.stringify(params),
       );
 
-      const isMultipart =
-        typeof FormData !== 'undefined' && data instanceof FormData;
+      const isMultipart = isFormDataLike(data);
       const requestHeaders: AxiosRequestConfig['headers'] = {
         ...(bearerToken &&
           !skipAuthBearer && {
@@ -53,11 +71,40 @@ const axiosBaseQuery =
           }),
         ...headers,
       };
-      // Let the runtime set multipart boundary; a bare multipart Content-Type breaks uploads
+      // Critical on Android: never send a bare/wrong Content-Type for FormData.
+      // Axios often injects application/x-www-form-urlencoded, which RN rejects
+      // with: multipart != application/x-www-form-urlencoded.
+      // Leave Content-Type unset so RN NetworkingModule sets multipart + boundary.
       if (isMultipart && requestHeaders) {
         delete (requestHeaders as Record<string, unknown>)['Content-Type'];
         delete (requestHeaders as Record<string, unknown>)['content-type'];
       }
+
+      const stripMultipartContentType = (
+        d: unknown,
+        reqHeaders: AxiosRequestConfig['headers'],
+      ) => {
+        if (!isFormDataLike(d) || !reqHeaders) {
+          return d;
+        }
+        const h = reqHeaders as {
+          delete?: (key: string) => void;
+          set?: (key: string, value: unknown) => void;
+          [key: string]: unknown;
+        };
+        if (typeof h.delete === 'function') {
+          h.delete('Content-Type');
+          h.delete('content-type');
+        } else {
+          delete h['Content-Type'];
+          delete h['content-type'];
+        }
+        // AxiosHeaders: also clear via set(undefined) when available
+        if (typeof h.set === 'function') {
+          h.set('Content-Type', undefined);
+        }
+        return d;
+      };
 
       return axios({
         url: url,
@@ -67,6 +114,16 @@ const axiosBaseQuery =
         params,
         timeout: timeout ?? (isMultipart ? 180000 : undefined),
         headers: requestHeaders,
+        // Pass FormData through unchanged, and strip Content-Type inside
+        // transformRequest (axios re-applies defaults after our header deletes).
+        ...(isMultipart
+          ? {
+              transformRequest: [
+                (d: unknown, h: AxiosRequestConfig['headers']) =>
+                  stripMultipartContentType(d, h),
+              ],
+            }
+          : {}),
       });
     };
 
@@ -119,11 +176,6 @@ const axiosBaseQuery =
       let err = axiosError as AxiosError;
       let status: number | string = err.response?.status ?? 'No status';
       let responseData: unknown = err.response?.data ?? {};
-      let detail =
-        (err.response?.data as { detail?: string })?.detail ||
-        (err.response?.data as { error?: { message?: string } })?.error
-          ?.message ||
-        err.message;
 
       const consentBlock = isAiConsentRequired(status, responseData);
 
@@ -159,9 +211,6 @@ const axiosBaseQuery =
             err = retryAxios;
             status = retryStatus ?? 'No status';
             responseData = retryData ?? {};
-            detail =
-              (retryData as { detail?: string })?.detail ||
-              retryAxios.message;
           }
         } else {
           performLogout();
@@ -199,7 +248,9 @@ const axiosBaseQuery =
         urlLower.includes('auth/verify-reset-otp') ||
         urlLower.includes('auth/resend-otp') ||
         urlLower.includes('auth/resend-reset-otp') ||
-        urlLower.includes('auth/reset-password');
+        urlLower.includes('auth/reset-password') ||
+        urlLower.includes('auth/change-password') ||
+        /\/profile\/?(\?|$)/.test(urlLower);
 
       if (!consentBlock) {
         if (
@@ -208,7 +259,14 @@ const axiosBaseQuery =
           !isQuotaPaywall &&
           !isFieldHandledAuthError
         ) {
-          showErrMsg(detail);
+          const toastMessage = getApiErrorMessage(
+            {
+              status,
+              data: responseData || err.message,
+            },
+            'Something went wrong. Please check your connection and try again.',
+          );
+          showErrMsg(toastMessage);
         }
       }
 

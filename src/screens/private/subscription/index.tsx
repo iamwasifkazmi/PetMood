@@ -24,6 +24,7 @@ import {
   SUBSCRIPTION_TRIAL_TRIES_PER_DAY,
   getProductIdFromIapProduct,
 } from '../../../constants/subscription';
+import config from '../../../common/config';
 import { Theme } from '../../../common/theme';
 import { showErrMsg, showSuccessMsg } from '../../../utils/flashMessage';
 import { subscriptionService } from '../../../services/subscriptionService';
@@ -415,9 +416,15 @@ const Subscription = () => {
       }
     }
     if (!canPurchaseFromStore) {
+      const rcKey = String(config.revenuecat_google_api_key || '').trim();
+      const rcNotConfigured =
+        Platform.OS === 'android' &&
+        (!rcKey || rcKey.startsWith('REPLACE_') || rcKey === 'goog_YOUR_KEY');
       showErrMsg(
         Platform.OS === 'android'
-          ? 'This plan is not available from Google Play yet. Pull down to refresh or try again in a moment.'
+          ? rcNotConfigured
+            ? 'Google Play billing is not configured yet. Add your RevenueCat Google API key (goog_…) in the app config, then restart.'
+            : 'This plan is not available from Google Play yet. Pull down to refresh or try again in a moment.'
           : 'This plan is not available from the App Store yet. Pull down to refresh or try again in a moment.',
       );
       return;

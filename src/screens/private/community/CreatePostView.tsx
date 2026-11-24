@@ -8,14 +8,15 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
 import { useTheme } from '../../../hooks/useTheme';
 import icons from '../../../assets/icons/icons';
 import { Theme } from '../../../common/theme';
-import EmojiSelector from 'react-native-emoji-selector';
 import ImagePicker, { ImageOrVideo } from 'react-native-image-crop-picker';
+import AppText from '../../../components/Text/AppText';
+import AntDesign from 'react-native-vector-icons/AntDesign';
+import EmojiPicker from '../../../components/EmojiPicker';
 
 interface CreatePostViewProps {
   formData: CreatePostArg;
@@ -34,9 +35,9 @@ const CreatePostView: React.FC<CreatePostViewProps> = ({
   const [inputHeight, setInputHeight] = useState(120);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
-  // 📸 Pick and crop images
   const handlePickImage = async () => {
     try {
+      setShowEmojiPicker(false);
       const result = await ImagePicker.openPicker({
         multiple: true,
         mediaType: 'photo',
@@ -51,43 +52,46 @@ const CreatePostView: React.FC<CreatePostViewProps> = ({
             type: img.mime || 'image/jpeg',
             fileName: img.filename || `image_${timestamp}_${index}.jpg`,
           }))
-        : [{
-            uri: (result as ImageOrVideo).path.startsWith('file://') 
-              ? (result as ImageOrVideo).path 
-              : `file://${(result as ImageOrVideo).path}`,
-            type: (result as ImageOrVideo).mime || 'image/jpeg',
-            fileName: (result as ImageOrVideo).filename || `image_${timestamp}.jpg`,
-          }];
+        : [
+            {
+              uri: (result as ImageOrVideo).path.startsWith('file://')
+                ? (result as ImageOrVideo).path
+                : `file://${(result as ImageOrVideo).path}`,
+              type: (result as ImageOrVideo).mime || 'image/jpeg',
+              fileName:
+                (result as ImageOrVideo).filename || `image_${timestamp}.jpg`,
+            },
+          ];
 
       setFormData(prev => ({
         ...prev,
         images: [...(prev.images || []), ...selectedImages],
       }));
-    } catch (err) {}
+    } catch {
+      // user cancelled
+    }
   };
 
-  // 😄 Toggle emoji picker
   const handleToggleEmoji = () => {
+    Keyboard.dismiss();
     setShowEmojiPicker(prev => !prev);
   };
 
-  // 😀 Add emoji to content
   const handleSelectEmoji = (emoji: string) => {
     setFormData(prev => ({ ...prev, content: prev.content + emoji }));
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={{ flex: 1 }}
+    >
+      <View
+        style={[
+          styles.container,
+          { borderColor: colors.border, minHeight: inputHeight + 40 },
+        ]}
       >
-        <View
-          style={[
-            styles.container,
-            { borderColor: colors.border, minHeight: inputHeight + 40 },
-          ]}
-        >
         <TextInput
           style={[styles.input, { height: inputHeight }]}
           placeholder="What’s on your mind..."
@@ -97,6 +101,7 @@ const CreatePostView: React.FC<CreatePostViewProps> = ({
           onChangeText={text =>
             setFormData(prev => ({ ...prev, content: text }))
           }
+          onFocus={() => setShowEmojiPicker(false)}
           onContentSizeChange={e =>
             setInputHeight(Math.max(120, e.nativeEvent.contentSize.height))
           }
@@ -107,7 +112,6 @@ const CreatePostView: React.FC<CreatePostViewProps> = ({
           </AppText>
         )}
 
-        {/* Image preview */}
         {formData?.images?.length > 0 && (
           <FlatList
             horizontal
@@ -130,18 +134,22 @@ const CreatePostView: React.FC<CreatePostViewProps> = ({
                       images: prev.images.filter((_, i) => i !== index),
                     }))
                   }
+                  hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
                 >
-                  <Image
-                    source={icons.close}
-                    style={{ width: 14, height: 14, tintColor: '#fff' }}
-                  />
+                  {icons.cross ? (
+                    <Image
+                      source={icons.cross}
+                      style={{ width: 14, height: 14, tintColor: '#fff' }}
+                    />
+                  ) : (
+                    <AntDesign name="close" size={14} color="#fff" />
+                  )}
                 </TouchableOpacity>
               </View>
             )}
           />
         )}
 
-        {/* Icon row */}
         <View style={styles.iconRow}>
           <TouchableOpacity onPress={handleToggleEmoji}>
             <Image
@@ -161,34 +169,21 @@ const CreatePostView: React.FC<CreatePostViewProps> = ({
         </View>
       </View>
 
-      {/* Emoji Selector */}
-      {showEmojiPicker && (
-        <EmojiSelector
-          onEmojiSelected={handleSelectEmoji}
-          showSearchBar={false}
-          showTabs={true}
-          showHistory={true}
-          showSectionTitles={false}
-          columns={8}
-          style={{ height: 250 }}
-          theme={{
-            background: colors.background,
-            header: colors.card,
-          }}
-        />
-      )}
-      </KeyboardAvoidingView>
-    </TouchableWithoutFeedback>
+      <EmojiPicker
+        visible={showEmojiPicker}
+        onClose={() => setShowEmojiPicker(false)}
+        onSelect={handleSelectEmoji}
+      />
+    </KeyboardAvoidingView>
   );
 };
 
 export default CreatePostView;
 
-// --- Styles
 const useStyles = (
   colors: Theme['colors'],
-  fonts: Theme['fonts'],
-  spacing: Theme['spacing'],
+  _fonts: Theme['fonts'],
+  _spacing: Theme['spacing'],
 ) =>
   StyleSheet.create({
     container: {
@@ -218,7 +213,6 @@ const useStyles = (
     },
     imageWrapper: {
       borderRadius: 8,
-      overflow: 'hidden',
       marginRight: 8,
       position: 'relative',
     },
@@ -233,6 +227,10 @@ const useStyles = (
       right: 4,
       backgroundColor: 'rgba(0,0,0,0.6)',
       borderRadius: 12,
-      padding: 2,
+      width: 24,
+      height: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 2,
     },
   });

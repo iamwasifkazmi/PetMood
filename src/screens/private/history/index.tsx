@@ -141,7 +141,7 @@ const History = ({ navigation }: HistoryProps) => {
             setPetDetails={setPetDetails}
           />
         )}
-        <GlobalBottomSheet ref={bottomSheetRef} snapPoints={['10%']}>
+        <GlobalBottomSheet ref={bottomSheetRef} enableDynamicSizing>
           <WarningImage />
           <AppText
             variant="subheading"

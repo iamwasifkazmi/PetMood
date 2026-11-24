@@ -8,6 +8,7 @@ interface UserQueryRes {
   number: string;
   createdAt: string;
   photoUrl?: string;
+  location?: string;
 }
 
 interface UpdateProfileArg {

@@ -124,7 +124,9 @@ export function getBoundRevenueCatAppUserId(): string | null {
 
 export function requireBoundRevenueCatUser(): string {
   if (!boundAppUserId) {
-    throw new Error('Please sign in before purchasing a subscription');
+    throw new Error(
+      'Google Play billing is not ready yet. Pull down to refresh, or check that RevenueCat is configured.',
+    );
   }
   return boundAppUserId;
 }
