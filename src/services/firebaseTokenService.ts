@@ -49,6 +49,7 @@ export async function refreshAccessToken(): Promise<string> {
       body.toString(),
       {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        timeout: 20000,
       },
     );
 

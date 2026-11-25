@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
 import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
-import ImagePicker from 'react-native-image-crop-picker';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useNavigation } from '@react-navigation/native';
 import { ValidationError } from 'yup';
@@ -26,6 +25,7 @@ import {
   getApiErrorMessage,
   SAVE_CHANGES_ERROR,
 } from '../../../utils/validations';
+import { pickProfileImage } from '../../../utils/pickMedia';
 
 const Settings = () => {
   const navigation = useNavigation();
@@ -65,18 +65,14 @@ const Settings = () => {
   const isPersonalTab = activeTab === 'personal_details';
   const isSecurityTab = activeTab === 'security';
 
-  const openGallery = async () => {
-    // Android: system Photo Picker — no READ_MEDIA_IMAGES (Play policy)
-    try {
-      const image = await ImagePicker.openPicker({
-        width: 300,
-        height: 300,
-        cropping: true,
-        mediaType: 'photo',
-      });
-      setPetImage(image.path);
-    } catch {
-      // user cancelled
+  const openPhotoPicker = async () => {
+    const picked = await pickProfileImage({
+      width: 300,
+      height: 300,
+      cropping: true,
+    });
+    if (picked?.path) {
+      setPetImage(picked.path);
     }
   };
 
@@ -339,7 +335,9 @@ const Settings = () => {
               />
               <TouchableOpacity
                 style={styles.cameraPicker}
-                onPress={openGallery}
+                onPress={() => {
+                  void openPhotoPicker();
+                }}
               >
                 <Image
                   source={icons.camera}

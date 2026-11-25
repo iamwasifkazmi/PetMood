@@ -33,6 +33,7 @@ import { CommunityProps, RouteName } from '../../../navigation/types';
 import CommentsView from './CommentsView';
 import CreatePostView from './CreatePostView';
 import {
+  cummunityApiSlice,
   useCreateCommunityCommentMutation,
   useCreateCommunityPostMutation,
   useDeleteCommunityPostMutation,
@@ -98,8 +99,10 @@ const Community = ({ navigation }: CommunityProps) => {
   const {
     data,
     isLoading: postsLoading,
-    refetch, // ✅ <-- get refetch function
-    isFetching, // ✅ <-- used to control refresh spinner
+    isFetching: postsFetching,
+    isError: postsError,
+    error: postsErrObj,
+    refetch,
   } = useGetCummunityPostsQuery(
     {
       limit: 20,
@@ -110,8 +113,10 @@ const Community = ({ navigation }: CommunityProps) => {
   const {
     data: myPost,
     isLoading: myPostsLoading,
-    refetch: myPostsRefetch, // ✅ <-- get refetch function
-    isFetching: myPostsIsFetching, // ✅ <-- used to control refresh spinner
+    isFetching: myPostsFetching,
+    isError: myPostsError,
+    error: myPostsErrObj,
+    refetch: myPostsRefetch,
   } = useGetMyCommunityPostsQuery(
     {
       limit: 20,
@@ -119,6 +124,27 @@ const Community = ({ navigation }: CommunityProps) => {
     },
     { skip: ugcTermsAccepted !== true },
   );
+
+  const feedPosts = isMyPostTab ? myPost : data;
+  const feedLoading = isMyPostTab
+    ? myPostsLoading || (myPostsFetching && !myPost)
+    : postsLoading || (postsFetching && !data);
+  const feedError = isMyPostTab ? myPostsError : postsError;
+  const feedList = Array.isArray(feedPosts)
+    ? feedPosts.filter(p => p?.id && !hiddenPostIds[p.id])
+    : [];
+  const showFeedSpinner = Boolean(feedLoading && feedList.length === 0);
+
+  // If a request hangs (token refresh / cold API), stop the endless spinner.
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
+  useEffect(() => {
+    if (!showFeedSpinner) {
+      setLoadTimedOut(false);
+      return;
+    }
+    const t = setTimeout(() => setLoadTimedOut(true), 25000);
+    return () => clearTimeout(t);
+  }, [showFeedSpinner]);
   const [createComment, { isLoading: createCommentLoading }] =
     useCreateCommunityCommentMutation();
   const { data: comments, isLoading: commentsLoading } =
@@ -339,7 +365,7 @@ const Community = ({ navigation }: CommunityProps) => {
         images: createPostData.images,
       };
 
-      const res = await createCommunityPost(payload).unwrap();
+      await createCommunityPost(payload).unwrap();
       setIsPostUpload(true);
       setMenuId(''); // Clear menuId to prevent accidental delete
       setCreatePostData({
@@ -348,6 +374,9 @@ const Community = ({ navigation }: CommunityProps) => {
         isPublic: true,
         images: [],
       });
+      // Refresh feeds so the new post appears even if cache patch missed
+      void refetch();
+      void myPostsRefetch();
       bottomSheetRef?.current?.expand();
       setCreatePost(false);
     } catch (err: any) {
@@ -582,7 +611,7 @@ const Community = ({ navigation }: CommunityProps) => {
             )}
           />
           <View style={{ flex: 1 }}>
-            {postsLoading ? (
+            {showFeedSpinner && !loadTimedOut ? (
               <ActivityIndicator
                 color={colors.primary}
                 size="large"
@@ -592,11 +621,65 @@ const Community = ({ navigation }: CommunityProps) => {
                   alignItems: 'center',
                 }}
               />
+            ) : (feedError || loadTimedOut) && feedList.length === 0 ? (
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  paddingHorizontal: 24,
+                  gap: 16,
+                }}
+              >
+                <AppText style={{ textAlign: 'center' }}>
+                  Couldn’t load posts. Check your connection and try again.
+                </AppText>
+                {!!(isMyPostTab ? myPostsErrObj : postsErrObj) && (
+                  <AppText
+                    size={12}
+                    color={colors.caption}
+                    style={{ textAlign: 'center' }}
+                  >
+                    {(() => {
+                      const err = (isMyPostTab ? myPostsErrObj : postsErrObj) as
+                        | { status?: number | string; data?: { detail?: string } | string }
+                        | undefined;
+                      if (!err) return '';
+                      if (typeof err.data === 'object' && err.data?.detail) {
+                        return String(err.data.detail);
+                      }
+                      if (typeof err.data === 'string') return err.data;
+                      if (err.status) return `Error ${err.status}`;
+                      return '';
+                    })()}
+                  </AppText>
+                )}
+                <PrimaryButton
+                  title="Retry"
+                  onPress={() => {
+                    setLoadTimedOut(false);
+                    // Drop bad cache entry then refetch fresh
+                    dispatch(
+                      cummunityApiSlice.util.resetApiState(),
+                    );
+                    void refetch();
+                    void myPostsRefetch();
+                  }}
+                />
+              </View>
             ) : (
               <FlatList
-                data={(isMyPostTab ? myPost : data)?.filter(p => !hiddenPostIds[p.id])}
+                data={feedList}
                 showsVerticalScrollIndicator={false}
                 keyExtractor={item => item.id}
+                ListEmptyComponent={
+                  <AppText
+                    style={{ textAlign: 'center', marginTop: 40 }}
+                    color={colors.caption}
+                  >
+                    No posts yet. Create the first one!
+                  </AppText>
+                }
                 renderItem={({ item }) => (
                   <CummunityCard
                     post={item}
@@ -608,10 +691,11 @@ const Community = ({ navigation }: CommunityProps) => {
                     isLikedPost={isLikedPost}
                   />
                 )}
-                refreshing={refreshing || isFetching || myPostsIsFetching} // ✅ controls loading spinner
-                onRefresh={handleRefresh} // ✅ triggers manual refresh
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
                 contentContainerStyle={{
-                  paddingBottom: 80, // optional extra space
+                  paddingBottom: 80,
+                  flexGrow: 1,
                 }}
               />
             )}
@@ -621,7 +705,7 @@ const Community = ({ navigation }: CommunityProps) => {
 
       <GlobalBottomSheet
         ref={bottomSheetRef}
-        snapPoints={['75%', '95%']}
+        enableDynamicSizing
         showHandle
       >
         {isPostUpload ? <SuccessImage /> : <WarningImage />}

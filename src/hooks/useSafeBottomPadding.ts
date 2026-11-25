@@ -1,17 +1,16 @@
-import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /**
  * Bottom padding that clears the iOS home indicator and Android
- * 3-button / gesture navigation bar.
+ * gesture / 3-button navigation bar.
  *
- * Android often reports inset 0 when edge-to-edge is off or OEM
- * navigation is translucent, so we keep a small platform floor.
+ * Trust SafeAreaInsets — this app uses edge-to-edge on Android, so
+ * `insets.bottom` is the real system inset. A hard floor (e.g. 56)
+ * double-counted that space and left a huge empty gap under the tab bar.
  */
 export function useSafeBottomPadding(extra = 16): number {
   const insets = useSafeAreaInsets();
-  const androidFloor = Platform.OS === 'android' ? 56 : 0;
-  return Math.max(insets.bottom, androidFloor) + extra;
+  return insets.bottom + extra;
 }
 
 export function useSafeTopPadding(extra = 0): number {

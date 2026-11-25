@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { showMessage } from 'react-native-flash-message';
 import { showSuccessMsg } from '../../../utils/flashMessage';
-import ImagePicker from 'react-native-image-crop-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import AntDesign from 'react-native-vector-icons/AntDesign';
 import icons from '../../../assets/icons/icons';
@@ -42,8 +41,8 @@ import {
 } from '../../../features/pet/petApiSlice';
 import { useTheme } from '../../../hooks/useTheme';
 import { useSubscription } from '../../../hooks/useSubscription';
-import { requestCameraPermission } from '../../../services/permission';
 import { formatDate } from '../../../utils/formatTime';
+import { pickProfileImage } from '../../../utils/pickMedia';
 import {
   addPetButtonTitle,
   getApiErrorDetail,
@@ -286,31 +285,15 @@ const Profile = ({ route, navigation }: ProfileProps) => {
     setShowPetDetails(false);
   };
 
-  const openGallery = async () => {
-    // Android: system Photo Picker — no READ_MEDIA_IMAGES (Play policy)
-    try {
-      const image = await ImagePicker.openPicker({
-        width: 300,
-        height: 300,
-        cropping: true,
-        mediaType: 'photo',
-      });
-      setPetImage(image.path);
-    } catch (e) {}
-  };
-
-  const openCamera = async () => {
-    const hasPermission = await requestCameraPermission();
-    if (!hasPermission) return;
-
-    try {
-      const image = await ImagePicker.openCamera({
-        width: 300,
-        height: 300,
-        cropping: true,
-      });
-      setPetImage(image.path);
-    } catch (e) {}
+  const openPhotoPicker = async () => {
+    const picked = await pickProfileImage({
+      width: 300,
+      height: 300,
+      cropping: true,
+    });
+    if (picked?.path) {
+      setPetImage(picked.path);
+    }
   };
 
   const handleDateChange = (selectedDate: Date) => {
@@ -358,7 +341,9 @@ const Profile = ({ route, navigation }: ProfileProps) => {
               />
               <TouchableOpacity
                 style={styles.cameraPicker}
-                onPress={openGallery}
+                onPress={() => {
+                  void openPhotoPicker();
+                }}
               >
                 <Image
                   source={icons.camera}

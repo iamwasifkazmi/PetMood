@@ -13,6 +13,16 @@ export const cummunityApiSlice = createApi({
         url: `community/posts?limit=${limit}&offset=${offset}`,
         method: 'get',
       }),
+      transformResponse: (response: unknown): CummunityRes[] => {
+        if (Array.isArray(response)) return response;
+        if (response && typeof response === 'object') {
+          const r = response as { posts?: CummunityRes[]; items?: CummunityRes[]; data?: CummunityRes[] };
+          if (Array.isArray(r.posts)) return r.posts;
+          if (Array.isArray(r.items)) return r.items;
+          if (Array.isArray(r.data)) return r.data;
+        }
+        return [];
+      },
       providesTags: ['CommunityPosts'],
     }),
 
@@ -22,6 +32,16 @@ export const cummunityApiSlice = createApi({
         url: `community/posts/my?limit=${limit}&offset=${offset}`,
         method: 'get',
       }),
+      transformResponse: (response: unknown): CummunityRes[] => {
+        if (Array.isArray(response)) return response;
+        if (response && typeof response === 'object') {
+          const r = response as { posts?: CummunityRes[]; items?: CummunityRes[]; data?: CummunityRes[] };
+          if (Array.isArray(r.posts)) return r.posts;
+          if (Array.isArray(r.items)) return r.items;
+          if (Array.isArray(r.data)) return r.data;
+        }
+        return [];
+      },
       providesTags: ['CommunityPosts'],
     }),
 
@@ -110,53 +130,71 @@ export const cummunityApiSlice = createApi({
 
     createCommunityPost: build.mutation<CummunityRes, CreatePostArg>({
       query: ({ content, tags, isPublic, images }) => {
-        const formData = new FormData();
+        const hasImages = Array.isArray(images) && images.length > 0;
 
+        // Text-only: JSON (FormData + axios urlencoded default crashes on Android).
+        if (!hasImages) {
+          return {
+            url: `community/posts/create`,
+            method: 'post',
+            data: {
+              content: content || '',
+              tags: tags || [],
+              isPublic: typeof isPublic === 'boolean' ? isPublic : true,
+            },
+            headers: { 'Content-Type': 'application/json' },
+          };
+        }
+
+        const formData = new FormData();
         if (content) formData.append('content', content);
         if (tags) formData.append('tags', JSON.stringify(tags));
         if (typeof isPublic === 'boolean')
           formData.append('isPublic', String(isPublic));
 
-        if (images && images.length > 0) {
-          images.forEach((img: any, index: number) => {
-            formData.append('images', {
-              uri: img.uri?.startsWith('file://') ? img.uri : `file://${img.uri}`,
-              type: img.type || 'image/jpeg',
-              name: img.fileName || `image_${index}.jpg`,
-            } as any);
-          });
-        }
+        images.forEach((img: any, index: number) => {
+          formData.append('images', {
+            uri: img.uri?.startsWith('file://') ? img.uri : `file://${img.uri}`,
+            type: img.type || 'image/jpeg',
+            name: img.fileName || `image_${index}.jpg`,
+          } as any);
+        });
 
         return {
           url: `community/posts/create`,
           method: 'post',
           data: formData,
-          // Do NOT set Content-Type — RN/axios must add multipart boundary
         };
       },
 
+      invalidatesTags: ['CommunityPosts'],
       async onQueryStarted(_, { dispatch, queryFulfilled }) {
         try {
           const { data: newPost } = await queryFulfilled;
+          const post =
+            newPost &&
+            typeof newPost === 'object' &&
+            'id' in (newPost as object)
+              ? (newPost as CummunityRes)
+              : (newPost as { post?: CummunityRes })?.post;
+          if (!post?.id) return;
 
-          // 1️⃣ Update community feed
           dispatch(
             cummunityApiSlice.util.updateQueryData(
               'getCummunityPosts',
               { limit: 20, offset: 0 },
               draft => {
-                draft.unshift(newPost);
+                if (Array.isArray(draft)) draft.unshift(post);
               },
             ),
           );
 
-          // 2️⃣ Update my posts feed
           dispatch(
             cummunityApiSlice.util.updateQueryData(
               'getMyCommunityPosts',
               { limit: 20, offset: 0 },
               draft => {
-                draft.unshift(newPost);
+                if (Array.isArray(draft)) draft.unshift(post);
               },
             ),
           );

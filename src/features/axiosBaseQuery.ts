@@ -71,16 +71,16 @@ const axiosBaseQuery =
           }),
         ...headers,
       };
-      // Critical on Android: never send a bare/wrong Content-Type for FormData.
-      // Axios often injects application/x-www-form-urlencoded, which RN rejects
-      // with: multipart != application/x-www-form-urlencoded.
-      // Leave Content-Type unset so RN NetworkingModule sets multipart + boundary.
-      if (isMultipart && requestHeaders) {
-        delete (requestHeaders as Record<string, unknown>)['Content-Type'];
-        delete (requestHeaders as Record<string, unknown>)['content-type'];
+      // Critical on Android RN: axios defaults POST to
+      // application/x-www-form-urlencoded, but RN FormData is multipart.
+      // NetworkingModule then throws: multipart != application/x-www-form-urlencoded.
+      // Force multipart/form-data (OkHttp adds the boundary).
+      if (isMultipart) {
+        (requestHeaders as Record<string, unknown>)['Content-Type'] =
+          'multipart/form-data';
       }
 
-      const stripMultipartContentType = (
+      const forceMultipartContentType = (
         d: unknown,
         reqHeaders: AxiosRequestConfig['headers'],
       ) => {
@@ -88,20 +88,13 @@ const axiosBaseQuery =
           return d;
         }
         const h = reqHeaders as {
-          delete?: (key: string) => void;
           set?: (key: string, value: unknown) => void;
           [key: string]: unknown;
         };
-        if (typeof h.delete === 'function') {
-          h.delete('Content-Type');
-          h.delete('content-type');
-        } else {
-          delete h['Content-Type'];
-          delete h['content-type'];
-        }
-        // AxiosHeaders: also clear via set(undefined) when available
         if (typeof h.set === 'function') {
-          h.set('Content-Type', undefined);
+          h.set('Content-Type', 'multipart/form-data');
+        } else {
+          h['Content-Type'] = 'multipart/form-data';
         }
         return d;
       };
@@ -112,15 +105,15 @@ const axiosBaseQuery =
         method,
         data,
         params,
-        timeout: timeout ?? (isMultipart ? 180000 : undefined),
+        timeout: timeout ?? (isMultipart ? 180000 : 60000),
         headers: requestHeaders,
-        // Pass FormData through unchanged, and strip Content-Type inside
-        // transformRequest (axios re-applies defaults after our header deletes).
+        // Pass FormData through unchanged; re-assert multipart in transformRequest
+        // because axios can overwrite Content-Type after our header setup.
         ...(isMultipart
           ? {
               transformRequest: [
                 (d: unknown, h: AxiosRequestConfig['headers']) =>
-                  stripMultipartContentType(d, h),
+                  forceMultipartContentType(d, h),
               ],
             }
           : {}),

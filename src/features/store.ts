@@ -52,9 +52,13 @@ export type RootState = ReturnType<typeof rootReducer>;
 
 const persistedReducer = persistReducer(
   {
-    key: 'root',
+    // Bump key to drop corrupt rehydrated RTK Query caches (stuck Community errors).
+    key: 'root_v2',
     storage: AsyncStorage,
     stateReconciler: autoMergeLevel2,
+    // Never persist API caches — rehydrated pending/error states cause endless
+    // loaders / permanent "Couldn't load posts" after a failed request.
+    whitelist: ['auth', 'user', 'subscription', 'pet', 'tabBar', 'Community'],
   },
   (state, action) => {
     if (action.type === 'LOGOUT') {
